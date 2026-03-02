@@ -1,0 +1,8 @@
+﻿CUSTOMER_CHANNEL,DESCRIPTION,CONCATENATION,SWIMLANE
+02,Custom,02 - Custom,Trade Planning Convenience
+03,Export,03 - Export,Trade Planning Convenience
+07,Food Service,07 - Food Service,Trade Planning Foodservice
+08,Convenience,08 - Convenience,Trade Planning Convenience
+12,Vending,12 - Vending,Trade Planning Foodservice
+15,SDA,15 - SDA,Trade Planning Convenience
+24,Direct to Consumer,24 - Direct to Consumer,Trade Planning Foodservice

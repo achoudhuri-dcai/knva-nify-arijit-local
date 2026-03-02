@@ -1,0 +1,22 @@
+# Lean requirements file generated based on actual imports
+addict
+azureml
+chromadb==1.0.6
+dash-core-components
+dash-html-components
+dash-table
+dash-bootstrap-components==1.7.1
+dash_daq==0.6.0
+flask
+jupyter_dash
+langroid==0.45.8
+matplotlib==3.10.1
+numpy==1.26.4
+pandas==2.2.3
+pdf2image
+psutil
+pydantic==2.11.0b1
+python==3.12.9
+sqlitebiter==0.36.3
+flask_socketio
+dash_socketio

@@ -1,0 +1,24 @@
+# Lean requirements file generated based on actual imports
+# Using Python 3.12.9
+addict==2.4.0
+chromadb==1.0.6
+dash==2.9.3
+dash-bootstrap-components==1.7.1
+dash_auth==2.3.0
+dash_daq==0.6.0
+dash_socketio==1.1.1
+Flask==3.1.0
+Flask-SocketIO==5.5.1
+jupyter-dash==0.4.2
+langroid==0.45.8
+numpy==1.26.4
+openai==1.75.0
+pandas==2.2.3
+pdf2image==1.17.0
+psutil==7.0.0
+pydantic==2.11.0b1
+python-dotenv==1.1.0
+pytz==2025.2
+PyYAML==6.0.2
+requests==2.32.3
+sqlitebiter

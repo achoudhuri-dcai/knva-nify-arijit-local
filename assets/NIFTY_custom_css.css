@@ -1,0 +1,291 @@
+/* Table of Contents
+
+1. Tab and Page Settings
+2. Sliders and Dropdowns
+
+*/
+
+/*------------------------------------------------------------------------------------------------------------------------------*/
+/* 1. Tab and Page Settings*/
+/*------------------------------------------------------------------------------------------------------------------------------*/
+
+/* Adjust heading margins */
+.heading-style, h1, h2, h3, h4, h5, h6 {
+	margin: 0.75rem 0 0.75rem;
+}
+
+/* Add a margin to the left side of the page within the tabs*/
+.tab-content {
+    margin-left: 20px;
+	margin-right: 10px;
+}
+
+/* Highlight selected tab with green line*/
+div.tab--selected {
+	border-bottom: none;
+	border-top: 3px solid #6b8e23 !important ; 
+}
+
+/* Changing the font to Gilroy */
+@font-face {
+    font-family: 'Gilroy';
+    src: url('/assets/fonts/Gilroy-Regular.ttf') format('truetype');
+    font-weight: normal; 
+    font-style: normal;
+}
+
+
+/* Adding Gilroy Bold */
+@font-face {
+    font-family: 'Gilroy';
+    src: url('/assets/fonts/Gilroy-Bold.ttf') format('truetype');
+    font-weight: bold;
+    font-style: normal;
+}
+
+/* Adding Gilroy Heavy */
+@font-face {
+    font-family: 'Gilroy';
+    src: url('/assets/fonts/Gilroy-Heavy.ttf') format('truetype');
+    font-weight: 900;
+    font-style: normal;
+}
+
+/* Create a utility class for extra heavy text */
+.gilroy-heavy {
+    font-weight: 900; /* This will specifically use Gilroy-Heavy.ttf */
+}
+
+/* Apply the font to the entire application */
+body {
+    font-family: 'Gilroy', sans-serif; /* 'sans-serif' as a fallback */
+	font-size: 1.2em; /* 110% of browser default */
+}
+
+/*------------------------------------------------------------------------------------------------------------------------------*/
+
+/*------------------------------------------------------------------------------------------------------------------------------*/
+/* 2. Sliders and Dropdowns*/
+/*------------------------------------------------------------------------------------------------------------------------------*/
+
+
+
+/*------------------------------------------------------------------------------------------------------------------------------*/
+
+/*------------------------------------------------------------------------------------------------------------------------------*/
+/* 3. Datatable*/
+/*------------------------------------------------------------------------------------------------------------------------------*/
+
+/* Change data table selected feature colors (trash/sort) to green*/
+.dash-table-container .dash-spreadsheet-container .dash-spreadsheet-inner table {
+    --accent: #6b8e23 !important;
+}
+
+/* Change selected cell color to grey in data table*/
+.dash-table-container .dash-spreadsheet-container .dash-spreadsheet-inner td.focused {
+	border-color: #F2F2F2 !important;
+    background-color: #F2F2F2 !important;
+}
+
+/*------------------------------------------------------------------------------------------------------------------------------*/
+
+/*------------------------------------------------------------------------------------------------------------------------------*/
+/* 4. Images*/
+/*------------------------------------------------------------------------------------------------------------------------------*/
+
+
+
+/*------------------------------------------------------------------------------------------------------------------------------*/
+/* 5. Buttons*/
+/*------------------------------------------------------------------------------------------------------------------------------*/
+
+/* Hide the native radio button */
+.custom-radio-input {
+    display: none;
+}
+
+/* Style the label as a box (the "button") */
+.custom-radio-label {
+    background-color: #F8F9FA; /* Very light grey (Bootstrap's light) */
+    border: 1px solid #E0E0E0; /* Slightly darker grey border for definition */
+    border-radius: 0.5rem; /* Slightly more rounded corners for button look */
+    padding: 0.5rem 1.25rem; /* Increased padding for a larger button feel */
+    margin: 0.5rem; /* Space between buttons */
+    cursor: pointer;
+    text-align: center;
+    transition: all 0.2s ease-in-out; /* Smooth transition for hover/selection */
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 2.5rem; /* Ensure a minimum height for button consistency */
+
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1); /* Subtle shadow */
+    color: #343a40; /* Default text color for non-selected buttons */
+}
+
+/* Hover effect for the buttons */
+.custom-radio-label:hover {
+    background-color: #E9ECEF; /* Slightly darker grey on hover */
+    border-color: #D3D6D9; /* A bit darker border on hover */
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15); /* More pronounced shadow on hover */
+}
+
+/* Purple styling for the selected button */
+.purple-radio-scheme .custom-radio-input:checked + .custom-radio-label {
+    background-color: rgba(132, 1, 255, 0.6); /* Purple with 60% opacity */
+    border-color: rgba(132, 1, 255, 0.8);   /* Purple border */
+    color: white;
+    box-shadow: 0 2px 6px rgba(132, 1, 255, 0.4); /* Purple shadow */
+}
+
+/* Ensure text color within the selected button remains readable */
+.custom-radio-input:checked + .custom-radio-label * {
+    color: white; /* Ensure any child elements also get white color */
+}
+
+
+/* --- GRID / LAYOUT --- */
+.custom-radio-group .form-check {
+    width: calc(50% - 1rem);
+    box-sizing: border-box;
+    flex-basis: calc(50% - 1rem);
+    margin: 0.5rem;
+}
+
+.custom-radio-group {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    padding: 0;
+    margin: 0;
+}
+
+/* Button hover color to deep red*/
+.btn-primary:hover {
+	/*background-color: #9E0B45 !important;
+	border-color: #9E0B45 !important; */
+	filter: brightness(0.8);
+	color: white;
+}
+
+/* Custom class for the buttons. Sets the same width and buffer margins on either side*/
+.human-chat-buttons {
+    min-width: 120px;/
+    margin-left: 0.5rem;
+    margin-right: 0.5rem;
+}
+
+/* Adjust margin-left of the first button to account for 'justify-content-end' */
+.button-group-container .my-button:first-child {
+    margin-left: 0;
+}
+
+/* Feedback button styling */
+.feedback-button {
+	background-color: #F8F9FA !important;
+    border: 2px solid #e0e0e0 !important;
+    /*color: #888;*/
+	color: #343a40 !important;
+    border-radius: 50%;
+    width: 50px;
+    height: 50px;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s ease;
+	font-size: 22px;  /* Bigger icon */
+    margin: 10px;  /* Added spacing around button */
+}
+
+.feedback-button:hover {
+	background-color: #E9ECEF; /* Slightly darker grey on hover */
+    border-color: #D3D6D9; /* A bit darker border on hover */
+	color: #FFFFFF;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+
+/* Purple styling when selected */
+.feedback-button.active,
+.feedback-button.active:hover,
+.feedback-button.active:focus,
+.feedback-button.active:active {
+    background-color: rgba(132, 1, 255, 0.6) !important;
+    border-color: rgba(132, 1, 255, 0.8) !important;
+    color: white !important;
+    box-shadow: 0 2px 6px rgba(132, 1, 255, 0.4) !important;
+}
+
+
+/*------------------------------------------------------------------------------------------------------------------------------*/
+/* 6. Menu Bars*/
+/*------------------------------------------------------------------------------------------------------------------------------*/
+/* Navigation link color to black*/
+.nav-link {
+	color: #000000;
+	flex-grow: 1;
+}
+.nav-pills .nav-link.active {
+    color: #FFFFFF;
+    background-color: #8000FF;
+}
+
+/* Styling for project items with edit icons */
+.project-item {
+    display: flex;
+    align-items: center;
+    width: 100%;
+}
+
+.edit-icon {
+    visibility: hidden;
+    cursor: pointer;
+    margin-left: 8px;
+    color: #6c757d;
+    font-size: 0.8rem;
+}
+
+.project-item:hover .edit-icon {
+    visibility: visible;
+}
+
+/*------------------------------------------------------------------------------------------------------------------------------*/
+/* 6. Text Boxes and Containers*/
+/*------------------------------------------------------------------------------------------------------------------------------*/
+/* Selected text box border shadow color to blue grey*/
+.form-control:focus {
+	box-shadow: 0 0 0 .2rem rgb(117, 163, 194) !important;
+}
+
+/* Italics and light grey text inside text human area input text box */
+#human-chat-text-area::placeholder {
+    font-style: italic;
+    color: #AAAAAA; /* Lighter grey */
+}
+
+/* Inner top shadow to human area input text box */
+#human-chat-text-area {
+    box-shadow: inset 0 5px 5px -5px rgba(0, 0, 0, 0.2);
+}
+
+/* Custom Container Style for thicker, darker border with shadow */
+.custom-container-style {
+    border: 2px solid #999999 !important; /* Thicker (2px) and darker grey border */
+    border-radius: 0.375rem;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2); 
+}
+
+/* Override the default Bootstrap .border color */
+.rounded.border {
+    border-color: #DDDDDD !important;
+}
+
+/*
+
+Using for comments
+
+Add '!important' to any section that needs to override the default
+
+*/

@@ -1,0 +1,12 @@
+﻿CUSTOMER_CHANNEL,DESCRIPTION,CONCATENATION
+01,Retail,01 - Retail
+04,Military,04 - Military
+05,Distributors,05 - Distributors
+06,Natural,06 - Natural
+09,Club,09 - Club
+10,Dollar,10 - Dollar
+13,Drug,13 - Drug
+14,Discount,14 - Discount
+19,Remarketing,19 - Remarketing
+20,Int'l Wholesalers,20 - Int'l Wholesalers
+25,Business To Business,25 - Business To Business
