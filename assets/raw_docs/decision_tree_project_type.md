@@ -1,0 +1,6 @@
+|   Question Number | Question                                                                                                 | Instructions                                                                               |
+|------------------:|:---------------------------------------------------------------------------------------------------------|:-------------------------------------------------------------------------------------------|
+|                 1 | Is this a brand new food type or food formulation?                                                       | If yes then project type is "PDR", else go to question number 2                            |
+|                 2 | Is this just a packaging change or variant of an existing product?                                       | If yes then project type is "PWR", else go to question number 3                            |
+|                 3 | Is this a supply chain initiated project for moving to a different Co-manufacturer or a supplier change? | If yes then project type is "SCR", else go to question number 4                            |
+|                 4 | Is this a KUBIC project type?                                                                            | If yes then project type is "KUBIC", else answer "contact NIF form administrator for help" |
