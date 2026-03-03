@@ -1,0 +1,5 @@
+{"id":"q1","question":"What does subtype mean in NIF setup?","expected_sources":[{"document_name":"NIF Training Deck v4.pdf","page_number":"24"}],"expected_terms":["subtype","product type"]}
+{"id":"q2","question":"How do I choose the correct product type and subtype?","expected_sources":[{"document_name":"Setup Type Guide.pdf","page_number":"1"}],"expected_terms":["product type","subtype"]}
+{"id":"q3","question":"What is a LIM in the NIF process?","expected_sources":[],"expected_terms":["LIM"]}
+{"id":"q4","question":"Where can I find guidance for creating a CASE NIF?","expected_sources":[],"expected_terms":["CASE NIF"]}
+{"id":"q5","question":"What are the key training resources available for new NIF users?","expected_sources":[],"expected_terms":["training","guide","setup"]}

@@ -30,6 +30,7 @@ import inspect
 import base64
 import re
 import uuid
+import threading
 from typing import List, Tuple, Optional
 from dotenv import find_dotenv, load_dotenv, dotenv_values
 dotenv_loaded = load_dotenv()
@@ -38,6 +39,18 @@ if dotenv_loaded:
     print('> Environment file loaded.')
 else:
     print('> Environment file is either empty or not found!')
+
+# Langroid parses DEBUG as a strict boolean. Some shells set DEBUG to values
+# like "release", which crashes startup before the app initializes.
+debug_env_value = os.getenv("DEBUG")
+if debug_env_value is not None:
+    normalized_debug = debug_env_value.strip().lower()
+    valid_debug_values = {
+        "", "0", "1", "false", "true", "f", "t", "no", "yes", "n", "y", "off", "on"
+    }
+    if normalized_debug not in valid_debug_values:
+        print(f"> WARNING: Invalid DEBUG={debug_env_value!r}; forcing DEBUG='false'.")
+        os.environ["DEBUG"] = "false"
 
 print(f"[{dt.datetime.now().strftime('%Y%m%d_%H%M%S.%f')[:19]}] Starting {__name__}")
 print(f"[{dt.datetime.now().strftime('%Y%m%d_%H%M%S.%f')[:19]}] cwd = {os.getcwd()}")
@@ -65,6 +78,7 @@ from lib.fa_dash_utils import instantiate_app
 import lib.projects_lib as pr
 import lib.knova_utils as utils
 import lib.data_processing_utilities as dpu
+import lib.nif_rag_engine as nif_rag
 
 # agent libraries
 import langroid as lr
@@ -91,7 +105,305 @@ version_number = '11/14/2025'
 # version_number = 0.2
 
 #### Toggle extra output for test / debug (True or False)
-extra_output_bool = True
+# Keep user UI clean by default; enable only when troubleshooting.
+extra_output_bool = os.getenv("NIFTY_EXTRA_OUTPUT", "false").strip().lower() in {
+    "1", "true", "t", "yes", "y", "on"
+}
+
+# NIF DB response mode:
+# - legacy: keep prior markdown-only response behavior
+# - enhanced: include markdown + structured table output
+NIF_DB_OUTPUT_MODE = os.getenv("NIF_DB_OUTPUT_MODE", "enhanced").strip().lower()
+if NIF_DB_OUTPUT_MODE not in {"legacy", "enhanced"}:
+    print(
+        f"> WARNING: Invalid NIF_DB_OUTPUT_MODE={NIF_DB_OUTPUT_MODE!r}; using 'enhanced'."
+    )
+    NIF_DB_OUTPUT_MODE = "enhanced"
+NIF_DB_ENHANCED_OUTPUT = NIF_DB_OUTPUT_MODE == "enhanced"
+
+# NIF DB SQL generation mode:
+# - first_pass: force SQL tool-call in first response for database questions.
+# - legacy: keep prior greeting/clarification-first behavior.
+NIF_DB_SQL_GENERATION_MODE = os.getenv(
+    "NIF_DB_SQL_GENERATION_MODE", "first_pass"
+).strip().lower()
+if NIF_DB_SQL_GENERATION_MODE not in {"first_pass", "legacy"}:
+    print(
+        f"> WARNING: Invalid NIF_DB_SQL_GENERATION_MODE={NIF_DB_SQL_GENERATION_MODE!r}; using 'first_pass'."
+    )
+    NIF_DB_SQL_GENERATION_MODE = "first_pass"
+NIF_DB_FORCE_FIRST_PASS_SQL = NIF_DB_SQL_GENERATION_MODE == "first_pass"
+
+_nif_db_first_pass_turns_raw = os.getenv("NIF_DB_FIRST_PASS_TURNS", "4").strip()
+try:
+    NIF_DB_FIRST_PASS_TURNS = max(1, int(_nif_db_first_pass_turns_raw))
+except Exception:
+    print(
+        f"> WARNING: Invalid NIF_DB_FIRST_PASS_TURNS={_nif_db_first_pass_turns_raw!r}; using 4."
+    )
+    NIF_DB_FIRST_PASS_TURNS = 4
+
+_nif_db_max_rows_raw = os.getenv("NIF_DB_MAX_ROWS", "2000").strip()
+try:
+    NIF_DB_MAX_ROWS = int(_nif_db_max_rows_raw)
+except Exception:
+    print(
+        f"> WARNING: Invalid NIF_DB_MAX_ROWS={_nif_db_max_rows_raw!r}; using 2000."
+    )
+    NIF_DB_MAX_ROWS = 2000
+
+# Hard cap to avoid oversized payloads in UI callback state.
+NIF_DB_MAX_ROWS = max(1, min(NIF_DB_MAX_ROWS, 2000))
+
+NIF_DB_TRACE_INCLUDE_ROWS = os.getenv("NIF_DB_TRACE_INCLUDE_ROWS", "true").strip().lower() in {
+    "1", "true", "t", "yes", "y", "on"
+}
+NIF_DB_SHOW_OUTPUT_RECORDS = os.getenv("NIF_DB_SHOW_OUTPUT_RECORDS", "false").strip().lower() in {
+    "1", "true", "t", "yes", "y", "on"
+}
+_nif_db_trace_preview_rows_raw = os.getenv(
+    "NIF_DB_TRACE_PREVIEW_ROWS", str(NIF_DB_MAX_ROWS)
+).strip()
+try:
+    NIF_DB_TRACE_PREVIEW_ROWS = int(_nif_db_trace_preview_rows_raw)
+except Exception:
+    print(
+        f"> WARNING: Invalid NIF_DB_TRACE_PREVIEW_ROWS={_nif_db_trace_preview_rows_raw!r}; "
+        f"using {NIF_DB_MAX_ROWS}."
+    )
+    NIF_DB_TRACE_PREVIEW_ROWS = NIF_DB_MAX_ROWS
+NIF_DB_TRACE_PREVIEW_ROWS = max(0, min(NIF_DB_TRACE_PREVIEW_ROWS, NIF_DB_MAX_ROWS))
+
+_nif_db_prompt_max_abbr_raw = os.getenv("NIF_DB_PROMPT_MAX_ABBREVIATIONS", "20").strip()
+try:
+    NIF_DB_PROMPT_MAX_ABBREVIATIONS = int(_nif_db_prompt_max_abbr_raw)
+except Exception:
+    print(
+        f"> WARNING: Invalid NIF_DB_PROMPT_MAX_ABBREVIATIONS={_nif_db_prompt_max_abbr_raw!r}; "
+        "using 20."
+    )
+    NIF_DB_PROMPT_MAX_ABBREVIATIONS = 20
+NIF_DB_PROMPT_MAX_ABBREVIATIONS = max(0, min(NIF_DB_PROMPT_MAX_ABBREVIATIONS, 200))
+
+NIF_RESUME_VERBOSE_CONTEXT = os.getenv(
+    "NIF_RESUME_VERBOSE_CONTEXT", "false"
+).strip().lower() in {
+    "1", "true", "t", "yes", "y", "on"
+}
+
+_nif_resume_summary_fields_raw = os.getenv("NIF_RESUME_SUMMARY_FIELDS", "6").strip()
+try:
+    NIF_RESUME_SUMMARY_FIELDS = int(_nif_resume_summary_fields_raw)
+except Exception:
+    print(
+        f"> WARNING: Invalid NIF_RESUME_SUMMARY_FIELDS={_nif_resume_summary_fields_raw!r}; using 6."
+    )
+    NIF_RESUME_SUMMARY_FIELDS = 6
+NIF_RESUME_SUMMARY_FIELDS = max(0, min(NIF_RESUME_SUMMARY_FIELDS, 20))
+
+NIF_CHAT_ENGINE = os.getenv("NIF_CHAT_ENGINE", "legacy").strip().lower()
+if NIF_CHAT_ENGINE not in {"legacy", "rag_v2"}:
+    print(
+        f"> WARNING: Invalid NIF_CHAT_ENGINE={NIF_CHAT_ENGINE!r}; using 'legacy'."
+    )
+    NIF_CHAT_ENGINE = "legacy"
+
+_nif_rag_max_auto_steps_raw = os.getenv("NIF_RAG_MAX_AUTO_STEPS", "10").strip()
+try:
+    NIF_RAG_MAX_AUTO_STEPS = int(_nif_rag_max_auto_steps_raw)
+except Exception:
+    print(
+        f"> WARNING: Invalid NIF_RAG_MAX_AUTO_STEPS={_nif_rag_max_auto_steps_raw!r}; using 10."
+    )
+    NIF_RAG_MAX_AUTO_STEPS = 10
+NIF_RAG_MAX_AUTO_STEPS = max(1, min(NIF_RAG_MAX_AUTO_STEPS, 30))
+
+_nif_rag_retrieval_top_k_raw = os.getenv("NIF_RAG_RETRIEVAL_TOP_K", "4").strip()
+try:
+    NIF_RAG_RETRIEVAL_TOP_K = int(_nif_rag_retrieval_top_k_raw)
+except Exception:
+    print(
+        f"> WARNING: Invalid NIF_RAG_RETRIEVAL_TOP_K={_nif_rag_retrieval_top_k_raw!r}; using 4."
+    )
+    NIF_RAG_RETRIEVAL_TOP_K = 4
+NIF_RAG_RETRIEVAL_TOP_K = max(1, min(NIF_RAG_RETRIEVAL_TOP_K, 10))
+
+NIF_GUIDE_PROMPT_MODE = os.getenv("NIF_GUIDE_PROMPT_MODE", "legacy").strip().lower()
+if NIF_GUIDE_PROMPT_MODE not in {"legacy", "compact"}:
+    print(
+        f"> WARNING: Invalid NIF_GUIDE_PROMPT_MODE={NIF_GUIDE_PROMPT_MODE!r}; using 'legacy'."
+    )
+    NIF_GUIDE_PROMPT_MODE = "legacy"
+
+_nif_guide_rule_window_raw = os.getenv("NIF_GUIDE_RULE_WINDOW", "2").strip()
+try:
+    NIF_GUIDE_RULE_WINDOW = int(_nif_guide_rule_window_raw)
+except Exception:
+    print(
+        f"> WARNING: Invalid NIF_GUIDE_RULE_WINDOW={_nif_guide_rule_window_raw!r}; using 2."
+    )
+    NIF_GUIDE_RULE_WINDOW = 2
+NIF_GUIDE_RULE_WINDOW = max(0, min(NIF_GUIDE_RULE_WINDOW, 5))
+
+_nif_guide_max_glossary_terms_raw = os.getenv("NIF_GUIDE_MAX_GLOSSARY_TERMS", "18").strip()
+try:
+    NIF_GUIDE_MAX_GLOSSARY_TERMS = int(_nif_guide_max_glossary_terms_raw)
+except Exception:
+    print(
+        f"> WARNING: Invalid NIF_GUIDE_MAX_GLOSSARY_TERMS={_nif_guide_max_glossary_terms_raw!r}; using 18."
+    )
+    NIF_GUIDE_MAX_GLOSSARY_TERMS = 18
+NIF_GUIDE_MAX_GLOSSARY_TERMS = max(0, min(NIF_GUIDE_MAX_GLOSSARY_TERMS, 80))
+
+_nif_guide_turns_per_submit_raw = os.getenv("NIF_GUIDE_TURNS_PER_SUBMIT", "4").strip()
+try:
+    NIF_GUIDE_TURNS_PER_SUBMIT = int(_nif_guide_turns_per_submit_raw)
+except Exception:
+    print(
+        f"> WARNING: Invalid NIF_GUIDE_TURNS_PER_SUBMIT={_nif_guide_turns_per_submit_raw!r}; using 4."
+    )
+    NIF_GUIDE_TURNS_PER_SUBMIT = 4
+NIF_GUIDE_TURNS_PER_SUBMIT = max(1, min(NIF_GUIDE_TURNS_PER_SUBMIT, 10))
+
+NIF_GUIDE_STRICT_OUTPUT_VALIDATION = os.getenv(
+    "NIF_GUIDE_STRICT_OUTPUT_VALIDATION", "false"
+).strip().lower() in {
+    "1", "true", "t", "yes", "y", "on"
+}
+
+NIF_GUIDE_TRIM_HISTORY = os.getenv("NIF_GUIDE_TRIM_HISTORY", "true").strip().lower() in {
+    "1", "true", "t", "yes", "y", "on"
+}
+
+_nif_guide_history_window_raw = os.getenv("NIF_GUIDE_HISTORY_WINDOW", "14").strip()
+try:
+    NIF_GUIDE_HISTORY_WINDOW = int(_nif_guide_history_window_raw)
+except Exception:
+    print(
+        f"> WARNING: Invalid NIF_GUIDE_HISTORY_WINDOW={_nif_guide_history_window_raw!r}; using 14."
+    )
+    NIF_GUIDE_HISTORY_WINDOW = 14
+NIF_GUIDE_HISTORY_WINDOW = max(4, min(NIF_GUIDE_HISTORY_WINDOW, 80))
+
+NIF_HISTORY_TRIM_OTHER_TASKS = os.getenv(
+    "NIF_HISTORY_TRIM_OTHER_TASKS", "false"
+).strip().lower() in {
+    "1", "true", "t", "yes", "y", "on"
+}
+
+_nif_other_task_history_window_raw = os.getenv("NIF_OTHER_TASK_HISTORY_WINDOW", "40").strip()
+try:
+    NIF_OTHER_TASK_HISTORY_WINDOW = int(_nif_other_task_history_window_raw)
+except Exception:
+    print(
+        f"> WARNING: Invalid NIF_OTHER_TASK_HISTORY_WINDOW={_nif_other_task_history_window_raw!r}; using 40."
+    )
+    NIF_OTHER_TASK_HISTORY_WINDOW = 40
+NIF_OTHER_TASK_HISTORY_WINDOW = max(8, min(NIF_OTHER_TASK_HISTORY_WINDOW, 200))
+
+NIF_LONGTERM_HISTORY_DEDUP = os.getenv(
+    "NIF_LONGTERM_HISTORY_DEDUP", "true"
+).strip().lower() in {
+    "1", "true", "t", "yes", "y", "on"
+}
+
+_nif_longterm_max_entries_raw = os.getenv("NIF_LONGTERM_MAX_ENTRIES", "12000").strip()
+try:
+    NIF_LONGTERM_MAX_ENTRIES = int(_nif_longterm_max_entries_raw)
+except Exception:
+    print(
+        f"> WARNING: Invalid NIF_LONGTERM_MAX_ENTRIES={_nif_longterm_max_entries_raw!r}; using 12000."
+    )
+    NIF_LONGTERM_MAX_ENTRIES = 12000
+NIF_LONGTERM_MAX_ENTRIES = max(0, min(NIF_LONGTERM_MAX_ENTRIES, 50000))
+
+print(
+    "> NIF_DB config:"
+    f" chat_engine={NIF_CHAT_ENGINE},"
+    f" rag_max_auto_steps={NIF_RAG_MAX_AUTO_STEPS},"
+    f" rag_retrieval_top_k={NIF_RAG_RETRIEVAL_TOP_K},"
+    f" mode={NIF_DB_SQL_GENERATION_MODE},"
+    f" first_pass_turns={NIF_DB_FIRST_PASS_TURNS},"
+    f" max_rows={NIF_DB_MAX_ROWS},"
+    f" show_output_records={NIF_DB_SHOW_OUTPUT_RECORDS},"
+    f" trace_include_rows={NIF_DB_TRACE_INCLUDE_ROWS},"
+    f" trace_preview_rows={NIF_DB_TRACE_PREVIEW_ROWS},"
+    f" prompt_max_abbr={NIF_DB_PROMPT_MAX_ABBREVIATIONS},"
+    f" resume_verbose={NIF_RESUME_VERBOSE_CONTEXT},"
+    f" resume_summary_fields={NIF_RESUME_SUMMARY_FIELDS},"
+    f" guide_prompt_mode={NIF_GUIDE_PROMPT_MODE},"
+    f" guide_rule_window={NIF_GUIDE_RULE_WINDOW},"
+    f" guide_max_glossary_terms={NIF_GUIDE_MAX_GLOSSARY_TERMS},"
+    f" guide_turns_per_submit={NIF_GUIDE_TURNS_PER_SUBMIT},"
+    f" guide_trim_history={NIF_GUIDE_TRIM_HISTORY},"
+    f" guide_history_window={NIF_GUIDE_HISTORY_WINDOW},"
+    f" strict_guide_validation={NIF_GUIDE_STRICT_OUTPUT_VALIDATION},"
+    f" trim_other_tasks={NIF_HISTORY_TRIM_OTHER_TASKS},"
+    f" other_task_history_window={NIF_OTHER_TASK_HISTORY_WINDOW},"
+    f" longterm_dedup={NIF_LONGTERM_HISTORY_DEDUP},"
+    f" longterm_max_entries={NIF_LONGTERM_MAX_ENTRIES}"
+)
+
+_docsearch_results_per_collection_raw = os.getenv(
+    "DOCSEARCH_RESULTS_PER_COLLECTION", "2"
+).strip()
+try:
+    DOCSEARCH_RESULTS_PER_COLLECTION = int(_docsearch_results_per_collection_raw)
+except Exception:
+    print(
+        f"> WARNING: Invalid DOCSEARCH_RESULTS_PER_COLLECTION={_docsearch_results_per_collection_raw!r}; "
+        "using 2."
+    )
+    DOCSEARCH_RESULTS_PER_COLLECTION = 2
+DOCSEARCH_RESULTS_PER_COLLECTION = max(1, min(DOCSEARCH_RESULTS_PER_COLLECTION, 8))
+
+_docsearch_max_total_pages_raw = os.getenv("DOCSEARCH_MAX_TOTAL_PAGES", "4").strip()
+try:
+    DOCSEARCH_MAX_TOTAL_PAGES = int(_docsearch_max_total_pages_raw)
+except Exception:
+    print(
+        f"> WARNING: Invalid DOCSEARCH_MAX_TOTAL_PAGES={_docsearch_max_total_pages_raw!r}; "
+        "using 4."
+    )
+    DOCSEARCH_MAX_TOTAL_PAGES = 4
+DOCSEARCH_MAX_TOTAL_PAGES = max(1, min(DOCSEARCH_MAX_TOTAL_PAGES, 12))
+
+_docsearch_min_hits_raw = os.getenv("DOCSEARCH_MIN_HITS", "1").strip()
+try:
+    DOCSEARCH_MIN_HITS = int(_docsearch_min_hits_raw)
+except Exception:
+    print(
+        f"> WARNING: Invalid DOCSEARCH_MIN_HITS={_docsearch_min_hits_raw!r}; using 1."
+    )
+    DOCSEARCH_MIN_HITS = 1
+DOCSEARCH_MIN_HITS = max(1, min(DOCSEARCH_MIN_HITS, DOCSEARCH_MAX_TOTAL_PAGES))
+
+_docsearch_max_distance_raw = os.getenv("DOCSEARCH_MAX_DISTANCE", "").strip()
+DOCSEARCH_MAX_DISTANCE = None
+if _docsearch_max_distance_raw:
+    try:
+        DOCSEARCH_MAX_DISTANCE = float(_docsearch_max_distance_raw)
+    except Exception:
+        print(
+            f"> WARNING: Invalid DOCSEARCH_MAX_DISTANCE={_docsearch_max_distance_raw!r}; "
+            "distance filtering disabled."
+        )
+        DOCSEARCH_MAX_DISTANCE = None
+
+DOCSEARCH_STRICT_GROUNDING = os.getenv(
+    "DOCSEARCH_STRICT_GROUNDING", "true"
+).strip().lower() in {
+    "1", "true", "t", "yes", "y", "on"
+}
+
+print(
+    "> DOCSEARCH config:"
+    f" per_collection={DOCSEARCH_RESULTS_PER_COLLECTION},"
+    f" max_total_pages={DOCSEARCH_MAX_TOTAL_PAGES},"
+    f" min_hits={DOCSEARCH_MIN_HITS},"
+    f" max_distance={DOCSEARCH_MAX_DISTANCE},"
+    f" strict_grounding={DOCSEARCH_STRICT_GROUNDING}"
+)
 
 app_title = "Kellanova Project NIFTY"
 external_stylesheets=[dbc.themes.BOOTSTRAP,
@@ -310,6 +622,10 @@ nif_database = os.path.join(utils.DATABASE_FOLDER, 'NIFS.db')
 # Brands database
 brands_database = os.path.join(utils.DATABASE_FOLDER, 'KNV_Active_Brands.db')
 
+# Trace holder for latest SQL submitted to NIF database tool.
+last_nif_sql_query = None
+last_nif_query_result = None
+
 # Database abbreviations
 db_abbreviations = pd.read_excel(
     os.path.join(utils.DOCUMENT_FOLDER, 'Glossary of Terms for NIFs.xlsx')
@@ -372,6 +688,15 @@ expert_system_rules = expert_system_rules.loc[~ _autopop_question]
 
 # Write to markdown for reading into LLM system message
 expert_system_rules_md = expert_system_rules.to_markdown(index=False)
+expert_system_rules = expert_system_rules.reset_index(drop=True)
+expert_rule_question_ids = [
+    str(qid).strip()
+    for qid in expert_system_rules["Question ID"].tolist()
+    if isinstance(qid, str) and qid.strip()
+]
+expert_rule_index_by_question_id = {
+    qid: idx for idx, qid in enumerate(expert_rule_question_ids)
+}
 
 # =============================================================================
 #### Implementation Dropdown Reference Lists
@@ -412,6 +737,15 @@ ddref_desig_cust = pd.read_csv(
 )
 ddref_desig_cust_md = ddref_desig_cust['DESIGNATED_CUST_NAME'].to_markdown(index=False)
 
+nif_dropdown_reference_markdown = {
+    "LIM_USERS": ddref_lim_users_md,
+    "RDL_CATEGORIES": ddref_rdl_categories_md,
+    "MATERIAL_PREFIX": ddref_material_prefix_md,
+    "ADDITIONAL_PACKAGING_LAUNCH": ddref_addnl_packaging_md,
+    "PRIVATE_LABEL": ddref_private_label_md,
+    "DESIGNATED_CUSTOMER_NAME": ddref_desig_cust_md,
+}
+
 # =============================================================================
 #### Implementation Field lookup and Glossary
 # =============================================================================
@@ -446,6 +780,282 @@ glossary_and_db_terms = dpu.cleancolnames(glossary_and_db_terms)
 # Create a dictionary
 glossary_and_db_terms = glossary_and_db_terms.set_index(keys='term')      # Column to become dictionary keys
 glossary_and_db_terms_dict = dict(glossary_and_db_terms['definition'])
+
+nif_field_number_to_column = {
+    int(row["field_number"]): row["field_name_and_number"]
+    for _, row in nif_fields_req_init_template.iterrows()
+}
+
+
+def _build_dropdown_values_catalog_from_frames(dropdown_frames: dict) -> dict:
+    """
+    Normalize dropdown reference dataframes into list-of-string value catalogs.
+    """
+
+    def _series_values(series_obj):
+        values = []
+        seen = set()
+        for value in list(series_obj):
+            value_text = str(value).strip() if value is not None else ""
+            if not value_text or value_text.lower() in {"nan", "none", "null"}:
+                continue
+            key = value_text.lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            values.append(value_text)
+        return values
+
+    def _pick_value_column(df_obj):
+        if df_obj is None or df_obj.empty:
+            return None
+        preferred_names = [
+            "Value",
+            "Category",
+            "DESIGNATED_CUST_NAME",
+            "MATERIAL_PREFIX",
+            "LIM",
+            "Name",
+        ]
+        for col in preferred_names:
+            if col in list(df_obj.columns):
+                return col
+        # Otherwise use first non-empty column.
+        for col in list(df_obj.columns):
+            if df_obj[col].notna().any():
+                return col
+        return None
+
+    dropdown_values = {}
+    for ref_name, df_obj in dropdown_frames.items():
+        col = _pick_value_column(df_obj)
+        if col is None:
+            dropdown_values[ref_name] = []
+            continue
+        dropdown_values[ref_name] = _series_values(df_obj[col])
+    return dropdown_values
+
+
+def _build_dropdown_values_catalog() -> dict:
+    dropdown_frames = {
+        "LIM_USERS": ddref_lim_users,
+        "RDL_CATEGORIES": ddref_rdl_categories,
+        "MATERIAL_PREFIX": ddref_material_prefix,
+        "ADDITIONAL_PACKAGING_LAUNCH": ddref_addnl_packaging,
+        "PRIVATE_LABEL": ddref_private_label,
+        "DESIGNATED_CUSTOMER_NAME": ddref_desig_cust,
+    }
+    return _build_dropdown_values_catalog_from_frames(dropdown_frames)
+
+
+NIF_RAG_ARTIFACTS_DIR = os.path.join(utils.CONTROL_FOLDER, "compiled_nif_rag")
+nif_rag_dropdown_catalog = _build_dropdown_values_catalog()
+nif_rag_knowledge_pack = None
+try:
+    nif_rag_knowledge_pack = nif_rag.build_knowledge_pack(
+        rules_df=expert_system_rules,
+        glossary_terms=glossary_and_db_terms_dict,
+        dropdown_catalog=nif_rag_dropdown_catalog,
+        artifacts_dir=NIF_RAG_ARTIFACTS_DIR,
+    )
+    print(
+        f"> NIF RAG knowledge pack built with {len(nif_rag_knowledge_pack.rule_order)} questions. "
+        f"Artifacts: {NIF_RAG_ARTIFACTS_DIR}"
+    )
+except Exception as err:
+    nif_rag_knowledge_pack = None
+    print(f"> WARNING: Failed to build NIF RAG knowledge pack: {err}")
+
+# In-memory RAG state per user session.
+nif_rag_session_state = {}
+nif_rag_message_history = {}
+nif_config_reload_lock = threading.Lock()
+
+
+def reload_nif_runtime_configuration() -> dict:
+    """
+    Reload NIF rules/glossary/dropdown references from control_docs without restart.
+    Rebuilds markdown caches and RAG v2 knowledge pack.
+    """
+    global expert_system_rules
+    global expert_system_rules_md
+    global expert_rule_question_ids
+    global expert_rule_index_by_question_id
+    global ddref_lim_users, ddref_lim_users_md
+    global ddref_rdl_categories, ddref_rdl_categories_md
+    global ddref_material_prefix, ddref_material_prefix_md
+    global ddref_addnl_packaging, ddref_addnl_packaging_md
+    global ddref_private_label, ddref_private_label_md
+    global ddref_desig_cust, ddref_desig_cust_md
+    global nif_dropdown_reference_markdown
+    global all_nif_fields
+    global nif_fields_req_init_template
+    global glossary_and_db_terms
+    global glossary_and_db_terms_dict
+    global nif_field_number_to_column
+    global nif_rag_dropdown_catalog
+    global nif_rag_knowledge_pack
+
+    with nif_config_reload_lock:
+        # 1) Reload rule source
+        rules_local = pd.read_excel(
+            os.path.join(utils.CONTROL_FOLDER, 'Expert_System_Rules.xlsx'),
+            sheet_name='Implementation v1',
+            header=1,
+        )
+        rules_local = rules_local.dropna(subset='Question ID')
+        if 'Length' in list(rules_local.columns):
+            del rules_local['Length']
+        _autopop_question = (rules_local['Question ID'] == 'START_REQ_INITIATE_Q')
+        rules_local = rules_local.loc[~ _autopop_question]
+        rules_local = rules_local.reset_index(drop=True)
+        rules_md_local = rules_local.to_markdown(index=False)
+        rule_ids_local = [
+            str(qid).strip()
+            for qid in rules_local["Question ID"].tolist()
+            if isinstance(qid, str) and qid.strip()
+        ]
+        rule_index_local = {qid: idx for idx, qid in enumerate(rule_ids_local)}
+
+        # 2) Reload dropdown references
+        dd_lim_local = pd.read_csv(
+            os.path.join(utils.CONTROL_FOLDER, 'dropdown_references', 'LIM_USERS.csv')
+        )
+        dd_rdl_local = pd.read_excel(
+            os.path.join(utils.CONTROL_FOLDER, 'dropdown_references', 'RDL_Categories.xlsx')
+        )
+        dd_pref_local = pd.read_excel(
+            os.path.join(utils.CONTROL_FOLDER, 'dropdown_references', 'MATERIAL_PREFIX.xlsx')
+        )
+        dd_add_local = pd.read_excel(
+            os.path.join(utils.CONTROL_FOLDER, 'dropdown_references', 'ADDITIONAL_PACKAGING_LAUNCH.xlsx')
+        )
+        dd_priv_local = pd.read_csv(
+            os.path.join(utils.CONTROL_FOLDER, 'dropdown_references', 'PRIVATE_LABEL.csv')
+        )
+        dd_cust_local = pd.read_csv(
+            os.path.join(utils.CONTROL_FOLDER, 'dropdown_references', 'Designate Customer Name.csv')
+        )
+
+        dd_lim_md_local = dd_lim_local.to_markdown(index=False)
+        dd_rdl_md_local = dd_rdl_local['Category'].to_markdown(index=False)
+        dd_pref_md_local = dd_pref_local[['COUNTRY', 'MATERIAL_PREFIX']].sort_values(
+            by='COUNTRY'
+        ).to_markdown(index=False)
+        dd_add_md_local = dd_add_local['Value'].to_markdown(index=False)
+        dd_priv_md_local = dd_priv_local.to_markdown(index=False)
+        dd_cust_md_local = dd_cust_local['DESIGNATED_CUST_NAME'].to_markdown(index=False)
+
+        dropdown_md_local = {
+            "LIM_USERS": dd_lim_md_local,
+            "RDL_CATEGORIES": dd_rdl_md_local,
+            "MATERIAL_PREFIX": dd_pref_md_local,
+            "ADDITIONAL_PACKAGING_LAUNCH": dd_add_md_local,
+            "PRIVATE_LABEL": dd_priv_md_local,
+            "DESIGNATED_CUSTOMER_NAME": dd_cust_md_local,
+        }
+        dropdown_values_local = _build_dropdown_values_catalog_from_frames(
+            {
+                "LIM_USERS": dd_lim_local,
+                "RDL_CATEGORIES": dd_rdl_local,
+                "MATERIAL_PREFIX": dd_pref_local,
+                "ADDITIONAL_PACKAGING_LAUNCH": dd_add_local,
+                "PRIVATE_LABEL": dd_priv_local,
+                "DESIGNATED_CUSTOMER_NAME": dd_cust_local,
+            }
+        )
+
+        # 3) Reload NIFTY definitions (template + glossary)
+        defs_file = os.path.join(utils.CONTROL_FOLDER, 'NIFTY Definitions v1.xlsx')
+        all_fields_local = pd.read_excel(defs_file, sheet_name='Module2-AI', header=2)
+        all_fields_local = dpu.cleancolnames(all_fields_local)
+        _req_proj_init = (all_fields_local['field_section'].str.upper() == 'REQUESTOR - PROJECT INITIATION')
+        field_name_array = all_fields_local.loc[_req_proj_init, 'field_name']
+        field_nbr_array = all_fields_local.loc[_req_proj_init, 'field_number']
+        template_local = pd.DataFrame([field_name_array, field_nbr_array]).transpose()
+        template_local['field_name_and_number'] = (
+            template_local['field_name']
+            + " ("
+            + template_local['field_number'].astype(int).astype(str)
+            + ")"
+        )
+        field_map_local = {
+            int(row["field_number"]): row["field_name_and_number"]
+            for _, row in template_local.iterrows()
+        }
+
+        glossary_local = pd.read_excel(defs_file, sheet_name='glossary', header=0)
+        glossary_local = dpu.cleancolnames(glossary_local)
+        glossary_local = glossary_local.set_index(keys='term')
+        glossary_dict_local = dict(glossary_local['definition'])
+
+        # 4) Rebuild RAG knowledge pack (non-fatal if build fails)
+        rag_build_error = None
+        rag_pack_local = None
+        try:
+            rag_pack_local = nif_rag.build_knowledge_pack(
+                rules_df=rules_local,
+                glossary_terms=glossary_dict_local,
+                dropdown_catalog=dropdown_values_local,
+                artifacts_dir=NIF_RAG_ARTIFACTS_DIR,
+            )
+        except Exception as err:
+            rag_build_error = str(err)
+
+        # 5) Commit to globals
+        expert_system_rules = rules_local
+        expert_system_rules_md = rules_md_local
+        expert_rule_question_ids = rule_ids_local
+        expert_rule_index_by_question_id = rule_index_local
+
+        ddref_lim_users, ddref_lim_users_md = dd_lim_local, dd_lim_md_local
+        ddref_rdl_categories, ddref_rdl_categories_md = dd_rdl_local, dd_rdl_md_local
+        ddref_material_prefix, ddref_material_prefix_md = dd_pref_local, dd_pref_md_local
+        ddref_addnl_packaging, ddref_addnl_packaging_md = dd_add_local, dd_add_md_local
+        ddref_private_label, ddref_private_label_md = dd_priv_local, dd_priv_md_local
+        ddref_desig_cust, ddref_desig_cust_md = dd_cust_local, dd_cust_md_local
+        nif_dropdown_reference_markdown = dropdown_md_local
+
+        all_nif_fields = all_fields_local
+        nif_fields_req_init_template = template_local
+        glossary_and_db_terms = glossary_local
+        glossary_and_db_terms_dict = glossary_dict_local
+        nif_field_number_to_column = field_map_local
+        nif_rag_dropdown_catalog = dropdown_values_local
+
+        if rag_pack_local is not None:
+            nif_rag_knowledge_pack = rag_pack_local
+
+        # 6) Reset RAG states and refresh legacy task prompts
+        nif_rag_session_state.clear()
+        nif_rag_message_history.clear()
+
+        refreshed_legacy_tasks = 0
+        for (task_name, _sid), task_obj in list(session_tasks.items()):
+            if task_name != "nifguide_task":
+                continue
+            try:
+                task_df = task_obj.agent.get_dataframe() if hasattr(task_obj.agent, "get_dataframe") else None
+                refresh_nifguide_task_prompt(
+                    session_task=task_obj,
+                    current_username="Unknown",
+                    user_query="",
+                    nif_progress_df=task_df,
+                )
+                refreshed_legacy_tasks += 1
+            except Exception as task_err:
+                print(f"> WARNING: Failed to refresh session nifguide task prompt: {task_err}")
+
+        summary = {
+            "rules_count": len(rule_ids_local),
+            "glossary_count": len(glossary_dict_local),
+            "dropdown_lists": len(dropdown_values_local),
+            "legacy_tasks_refreshed": refreshed_legacy_tasks,
+            "rag_pack_ready": rag_pack_local is not None or nif_rag_knowledge_pack is not None,
+            "rag_build_error": rag_build_error,
+            "artifacts_dir": NIF_RAG_ARTIFACTS_DIR,
+        }
+        return summary
 
 # =============================================================================
 #### Define Styles
@@ -643,6 +1253,780 @@ def remove_tool_calls(text):
 
     return cleaned_text.strip()
 
+
+def parse_function_arguments(function_arguments):
+    """
+    Normalize tool/function-call arguments into a dictionary when possible.
+    """
+    if isinstance(function_arguments, dict):
+        return function_arguments
+    if isinstance(function_arguments, str):
+        function_arguments = function_arguments.strip()
+        if not function_arguments:
+            return None
+        try:
+            parsed = json.loads(function_arguments)
+            if isinstance(parsed, dict):
+                return parsed
+        except Exception:
+            return None
+    return None
+
+
+def get_latest_sql_trace(agent):
+    """
+    Return the latest SQL query and latest SQL tool output from message history.
+    """
+    latest_sql = None
+    latest_tool_output = None
+    history = getattr(agent, "message_history", []) or []
+
+    for msg in reversed(history):
+        # Capture latest tool output text.
+        if latest_tool_output is None:
+            msg_content = getattr(msg, "content", None)
+            msg_role = getattr(msg, "role", None)
+            msg_role_value = msg_role.value if hasattr(msg_role, "value") else str(msg_role)
+            if isinstance(msg_content, str) and msg_content.strip():
+                msg_content_clean = msg_content.strip()
+                if (
+                    str(msg_role_value).lower() == "tool"
+                    or msg_content_clean.startswith("Query returned ")
+                    or msg_content_clean.startswith("Query executed successfully")
+                    or msg_content_clean.startswith("SQL Operational Error:")
+                    or msg_content_clean.startswith("Database Error:")
+                    or msg_content_clean.startswith("Unexpected Error:")
+                ):
+                    latest_tool_output = msg_content_clean
+
+        # Capture latest SQL from function_call.
+        if latest_sql is None:
+            function_call = getattr(msg, "function_call", None)
+            function_args = parse_function_arguments(getattr(function_call, "arguments", None))
+            if isinstance(function_args, dict):
+                sql_query = function_args.get("SQL_QUERY")
+                if isinstance(sql_query, str) and sql_query.strip():
+                    latest_sql = sql_query.strip()
+
+        # Some providers use tool_calls list rather than function_call.
+        if latest_sql is None:
+            tool_calls = getattr(msg, "tool_calls", None)
+            if isinstance(tool_calls, list):
+                for tool_call in tool_calls:
+                    function_obj = getattr(tool_call, "function", None)
+                    function_args = parse_function_arguments(getattr(function_obj, "arguments", None))
+                    if isinstance(function_args, dict):
+                        sql_query = function_args.get("SQL_QUERY")
+                        if isinstance(sql_query, str) and sql_query.strip():
+                            latest_sql = sql_query.strip()
+                            break
+
+        if latest_sql is not None and latest_tool_output is not None:
+            break
+
+    return latest_sql, latest_tool_output
+
+
+def build_nif_llm_prompt_payload(session_task, user_prompt, session_id):
+    """
+    Capture the system+user prompt payload sent to NIFDatabaseAgent.
+    """
+    system_prompt = ""
+    task_system_prompt = getattr(session_task, "system_message", None)
+    agent_system_prompt = getattr(getattr(session_task, "agent", None), "system_message", None)
+    for candidate in [task_system_prompt, agent_system_prompt]:
+        if isinstance(candidate, str) and candidate.strip():
+            system_prompt = candidate
+            break
+
+    return {
+        "captured_at": datetime.now().isoformat(timespec="seconds"),
+        "session_id": str(session_id or ""),
+        "system_prompt": system_prompt,
+        "user_prompt": str(user_prompt or ""),
+    }
+
+
+def format_nif_llm_prompt_for_modal(prompt_payload):
+    """
+    Convert stored prompt payload into readable modal text.
+    """
+    if not isinstance(prompt_payload, dict):
+        return "No NIFDatabaseAgent prompt has been captured yet."
+
+    captured_at = str(prompt_payload.get("captured_at", "") or "")
+    session_id = str(prompt_payload.get("session_id", "") or "")
+    system_prompt = str(prompt_payload.get("system_prompt", "") or "")
+    user_prompt = str(prompt_payload.get("user_prompt", "") or "")
+
+    if not system_prompt.strip():
+        system_prompt = "(System prompt not available for this run.)"
+    if not user_prompt.strip():
+        user_prompt = "(User prompt was empty.)"
+
+    return (
+        f"Captured At: {captured_at}\n"
+        f"Session ID: {session_id}\n\n"
+        "=== SYSTEM PROMPT ===\n"
+        f"{system_prompt}\n\n"
+        "=== USER MESSAGE ===\n"
+        f"{user_prompt}\n"
+    )
+
+
+def _safe_text(value) -> str:
+    if value is None:
+        return ""
+    try:
+        if pd.isna(value):
+            return ""
+    except Exception:
+        pass
+    return str(value).strip()
+
+
+def _extract_embedded_question_ids(text: str) -> List[str]:
+    if not isinstance(text, str) or not text.strip():
+        return []
+    ids = []
+    for match in re.finditer(r"\b([A-Z][A-Z0-9_]*_Q)\b", text.upper()):
+        qid = match.group(1).strip()
+        if qid and qid in expert_rule_index_by_question_id and qid not in ids:
+            ids.append(qid)
+    return ids
+
+
+def _extract_goto_question_ids(instruction_text: str) -> List[str]:
+    if not isinstance(instruction_text, str) or not instruction_text.strip():
+        return []
+    targets = []
+    for match in re.finditer(r"go to\s+([A-Z][A-Z0-9_]*_Q)\b", instruction_text, flags=re.IGNORECASE):
+        qid = _safe_text(match.group(1)).upper()
+        if qid and qid in expert_rule_index_by_question_id and qid not in targets:
+            targets.append(qid)
+    return targets
+
+
+def _extract_reference_list_names(instruction_text: str) -> List[str]:
+    if not isinstance(instruction_text, str) or not instruction_text.strip():
+        return []
+    names = []
+    for match in re.finditer(
+        r"reference list:\s*(?:PRL:\s*)?([A-Z_]+)",
+        instruction_text,
+        flags=re.IGNORECASE,
+    ):
+        ref_name = _safe_text(match.group(1)).upper()
+        if ref_name in nif_dropdown_reference_markdown and ref_name not in names:
+            names.append(ref_name)
+    return names
+
+
+def _get_last_nif_answer_state(nif_progress_df: Optional[pd.DataFrame]) -> Tuple[str, str]:
+    if nif_progress_df is None or not isinstance(nif_progress_df, pd.DataFrame) or nif_progress_df.empty:
+        return "", ""
+
+    try:
+        last_qid = _safe_text(nif_progress_df.get("_agentref_last_question_answered", pd.Series([""])).iloc[0]).upper()
+    except Exception:
+        last_qid = ""
+    try:
+        last_answer = _safe_text(nif_progress_df.get("_agentref_last_answer_given", pd.Series([""])).iloc[0])
+    except Exception:
+        last_answer = ""
+    return last_qid, last_answer
+
+
+def infer_expected_nif_question_id(
+    nif_progress_df: Optional[pd.DataFrame],
+    user_query: str = "",
+) -> str:
+    if not expert_rule_question_ids:
+        return ""
+
+    first_qid = expert_rule_question_ids[0]
+    query_qids = _extract_embedded_question_ids(user_query)
+    if query_qids:
+        return query_qids[0]
+
+    last_qid, last_answer = _get_last_nif_answer_state(nif_progress_df)
+    if not last_qid or last_qid not in expert_rule_index_by_question_id:
+        return first_qid
+
+    idx = expert_rule_index_by_question_id[last_qid]
+    row = expert_system_rules.iloc[idx]
+    instructions = _safe_text(row.get("Instructions", ""))
+    answer_lc = _safe_text(last_answer).lower()
+
+    for line in instructions.splitlines():
+        line_text = _safe_text(line)
+        if not line_text:
+            continue
+        goto_ids = _extract_goto_question_ids(line_text)
+        if not goto_ids:
+            continue
+        quoted_values = re.findall(r"'([^']+)'", line_text)
+        if quoted_values and answer_lc:
+            for token in quoted_values:
+                token_lc = _safe_text(token).lower()
+                if token_lc and (token_lc in answer_lc or answer_lc in token_lc):
+                    return goto_ids[0]
+        if not quoted_values:
+            return goto_ids[0]
+
+    goto_ids = _extract_goto_question_ids(instructions)
+    if goto_ids:
+        return goto_ids[0]
+
+    next_idx = idx + 1
+    if next_idx < len(expert_rule_question_ids):
+        return expert_rule_question_ids[next_idx]
+    return expert_rule_question_ids[-1]
+
+
+def _build_nif_progress_snapshot(nif_progress_df: Optional[pd.DataFrame]) -> str:
+    if nif_progress_df is None or not isinstance(nif_progress_df, pd.DataFrame) or nif_progress_df.empty:
+        return "- (No active NIF progress dataframe found.)"
+
+    placeholder_values = {"", "<NOT YET DETERMINED>", "<N/A>", "nan", "none"}
+    last_qid, last_answer = _get_last_nif_answer_state(nif_progress_df)
+    lines = []
+    if last_qid:
+        lines.append(f"- Last question answered: {last_qid}")
+    if last_answer and last_answer.strip().lower() not in placeholder_values:
+        lines.append(f"- Last answer given: {last_answer}")
+
+    filled_fields = []
+    for col_name in nif_progress_df.columns:
+        if col_name.startswith("_agentref_"):
+            continue
+        try:
+            value = _safe_text(nif_progress_df.iloc[0][col_name])
+        except Exception:
+            continue
+        if not value:
+            continue
+        if value.strip().lower() in placeholder_values:
+            continue
+        filled_fields.append((col_name, value))
+        if len(filled_fields) >= 8:
+            break
+
+    if filled_fields:
+        lines.append("- Known field values:")
+        for field_name, field_value in filled_fields:
+            lines.append(f"  - {field_name}: {field_value}")
+    else:
+        lines.append("- Known field values: (none yet)")
+
+    return "\n".join(lines)
+
+
+def _select_nif_focus_rule_indices(expected_question_id: str, user_query: str) -> List[int]:
+    if not expert_rule_question_ids:
+        return []
+
+    idxs = set()
+    if expected_question_id in expert_rule_index_by_question_id:
+        expected_idx = expert_rule_index_by_question_id[expected_question_id]
+    else:
+        expected_idx = 0
+
+    for idx in range(
+        max(0, expected_idx - NIF_GUIDE_RULE_WINDOW),
+        min(len(expert_rule_question_ids), expected_idx + NIF_GUIDE_RULE_WINDOW + 1),
+    ):
+        idxs.add(idx)
+
+    for query_qid in _extract_embedded_question_ids(user_query):
+        qidx = expert_rule_index_by_question_id.get(query_qid)
+        if qidx is not None:
+            idxs.add(qidx)
+
+    for idx in list(idxs):
+        try:
+            instructions = _safe_text(expert_system_rules.iloc[idx].get("Instructions", ""))
+        except Exception:
+            instructions = ""
+        for goto_qid in _extract_goto_question_ids(instructions):
+            goto_idx = expert_rule_index_by_question_id.get(goto_qid)
+            if goto_idx is not None:
+                idxs.add(goto_idx)
+
+    return sorted(idxs)
+
+
+def _build_nif_dropdown_reference_block(focus_rules_df: Optional[pd.DataFrame], include_all: bool) -> str:
+    if include_all or focus_rules_df is None or focus_rules_df.empty:
+        selected_refs = list(nif_dropdown_reference_markdown.keys())
+    else:
+        selected_refs = []
+        for instr in focus_rules_df.get("Instructions", pd.Series(dtype=str)).tolist():
+            for ref_name in _extract_reference_list_names(_safe_text(instr)):
+                if ref_name not in selected_refs:
+                    selected_refs.append(ref_name)
+
+    if not selected_refs:
+        return "(No dropdown reference list required for the current focused rules.)"
+
+    blocks = []
+    for ref_name in selected_refs:
+        md_value = _safe_text(nif_dropdown_reference_markdown.get(ref_name, ""))
+        if not md_value:
+            continue
+        blocks.append(f"<{ref_name}>\n{md_value}\n</{ref_name}>")
+
+    return "\n\n".join(blocks) if blocks else "(No dropdown reference list content available.)"
+
+
+def _build_nif_glossary_subset(user_query: str, max_items: int) -> dict:
+    if max_items <= 0:
+        return {}
+    query_tokens = set(re.findall(r"[a-z0-9]+", _safe_text(user_query).lower()))
+    if not query_tokens:
+        return {}
+
+    scored = []
+    for term, definition in glossary_and_db_terms_dict.items():
+        term_text = _safe_text(term)
+        def_text = _safe_text(definition)
+        if not term_text and not def_text:
+            continue
+        term_tokens = set(re.findall(r"[a-z0-9]+", term_text.lower()))
+        def_tokens = set(re.findall(r"[a-z0-9]+", def_text.lower()))
+        score = len(query_tokens.intersection(term_tokens)) * 3 + len(
+            query_tokens.intersection(def_tokens)
+        )
+        if score > 0:
+            scored.append((score, term_text.lower(), term_text, def_text))
+
+    if not scored:
+        return {}
+
+    scored.sort(key=lambda item: (-item[0], item[1]))
+    subset = {}
+    for _, _, term_text, def_text in scored:
+        subset[term_text] = def_text
+        if len(subset) >= max_items:
+            break
+    return subset
+
+
+def build_nifguide_fallback_message(expected_question_id: str) -> str:
+    if expected_question_id in expert_rule_index_by_question_id:
+        row = expert_system_rules.iloc[expert_rule_index_by_question_id[expected_question_id]]
+        question_text = _safe_text(row.get("Question", ""))
+        if question_text:
+            return (
+                f"Question {expected_question_id}: {question_text}\n\n"
+                "Please provide your answer and I will record it before moving to the next step."
+            )
+    return "Please provide your next NIF answer, and I will continue one step at a time."
+
+
+def enforce_nifguide_response_contract(response_text: str, expected_question_id: str) -> str:
+    text = _safe_text(response_text)
+    if not NIF_GUIDE_STRICT_OUTPUT_VALIDATION:
+        return text
+
+    if not text:
+        return build_nifguide_fallback_message(expected_question_id)
+
+    # Only block clear SQL-shaped content; do not block natural-language
+    # guidance like "please select an option".
+    looks_like_sql = bool(
+        re.search(r"(?is)\bselect\b[\s\S]{0,600}\bfrom\b", text)
+        or re.search(r"(?im)^\s*with\s+[a-z0-9_]+\s+as\s*\(", text)
+        or re.search(r"(?im)^\s*(insert|update|delete|drop|alter)\b", text)
+    )
+    if "```sql" in text.lower() or looks_like_sql:
+        return build_nifguide_fallback_message(expected_question_id)
+
+    heading_pattern = re.compile(r"(?im)^\s*\*{0,2}\s*question\s+([A-Z0-9_]+)\s*:")
+    heading_matches = list(heading_pattern.finditer(text))
+
+    if len(heading_matches) > 1:
+        text = text[: heading_matches[1].start()].strip()
+        heading_matches = list(heading_pattern.finditer(text))
+
+    if heading_matches:
+        found_qid = _safe_text(heading_matches[0].group(1)).upper()
+        if found_qid and found_qid not in expert_rule_index_by_question_id:
+            return build_nifguide_fallback_message(expected_question_id)
+        if expected_question_id and found_qid and found_qid != expected_question_id:
+            text = heading_pattern.sub(
+                f"Question {expected_question_id}:",
+                text,
+                count=1,
+            )
+
+    has_option_list = bool(re.search(r"(?m)^\s*(?:\d+\.|[-*])\s+\S+", text))
+    if expected_question_id and "?" not in text and not has_option_list:
+        completion_markers = (
+            "completed",
+            "complete",
+            "all required",
+            "saved",
+            "done",
+            "end_req_initiate_q",
+        )
+        if not any(marker in text.lower() for marker in completion_markers):
+            return build_nifguide_fallback_message(expected_question_id)
+
+    return text.strip()
+
+
+def _extract_inline_choice_list(question_text: str) -> List[str]:
+    text = _safe_text(question_text)
+    if not text:
+        return []
+    normalized = (
+        text.replace("“", '"')
+        .replace("”", '"')
+        .replace("’", "'")
+        .replace("‘", "'")
+    )
+    match = re.search(r"\b(?:in|for)\s+(.+?)\?\s*$", normalized, flags=re.IGNORECASE)
+    if not match:
+        return []
+    segment = match.group(1)
+    segment = re.sub(r"\s+or\s+", ", ", segment, flags=re.IGNORECASE)
+    segment = re.sub(r"\s+and\s+", ", ", segment, flags=re.IGNORECASE)
+
+    options = []
+    seen = set()
+    for raw in segment.split(","):
+        option = re.sub(r"\s+", " ", raw).strip(" '\"()")
+        if not option:
+            continue
+        if len(option) > 48:
+            continue
+        key = option.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        options.append(option)
+    if len(options) < 2 or len(options) > 15:
+        return []
+    return options
+
+
+def _compact_question_for_options(question_text: str, options: List[str]) -> str:
+    text = _safe_text(question_text)
+    if not text or not options:
+        return text
+    text_lc = text.lower()
+    first_idx = None
+    for option in options:
+        idx = text_lc.find(option.lower())
+        if idx == -1:
+            continue
+        if first_idx is None or idx < first_idx:
+            first_idx = idx
+    if first_idx is None:
+        return text
+    prefix = text[:first_idx].rstrip(" ,;:-")
+    if len(prefix) < 12:
+        return text
+    if not prefix.endswith("?"):
+        prefix = prefix.rstrip(" ?") + "?"
+    return prefix
+
+
+def format_nifguide_choices_multiline(response_text: str) -> str:
+    """
+    For New/Load NIF responses: if question line contains inline comma-separated
+    choices and no numbered list exists, convert choices to one-per-line.
+    """
+    text = _safe_text(response_text)
+    if not text:
+        return text
+
+    if re.search(r"(?m)^\s*\d+\.\s+\S+", text):
+        return text
+
+    lines = text.splitlines()
+    for i, line in enumerate(lines):
+        line_text = _safe_text(line)
+        if not line_text:
+            continue
+        if "?" not in line_text:
+            continue
+        # Fast skip: no inline list signal.
+        if "," not in line_text and " or " not in line_text.lower():
+            continue
+
+        question_text = line_text
+        prefix = ""
+
+        # Case A: canonical "Question <ID>:" prefix
+        match = re.match(r"(?is)^(\s*\*{0,2}\s*Question\s+[A-Z0-9_\.:-]+\s*:\s*)(.+)$", line_text)
+        if match:
+            prefix = str(match.group(1) or "")
+            if not prefix.endswith(" "):
+                prefix += " "
+            question_text = _safe_text(match.group(2))
+        else:
+            # Case B: markdown bold prefix like "**Question:** ..."
+            match2 = re.match(r"(?is)^(\s*\*{0,2}\s*Question\s*:\s*\*{0,2}\s*)(.+)$", line_text)
+            if match2:
+                prefix = str(match2.group(1) or "")
+                if not prefix.endswith(" "):
+                    prefix += " "
+                question_text = _safe_text(match2.group(2))
+
+        options = _extract_inline_choice_list(question_text)
+        if not options:
+            continue
+
+        base_question = _compact_question_for_options(question_text, options)
+        new_lines = lines[:]
+        if prefix:
+            new_lines[i] = f"{prefix}{base_question}"
+        else:
+            new_lines[i] = base_question
+
+        insert_lines = [""]
+        insert_lines.extend([f"{idx}. {option}" for idx, option in enumerate(options, start=1)])
+        insert_lines.extend(["", "Reply with the option number or option text."])
+        new_lines = new_lines[: i + 1] + insert_lines + new_lines[i + 1 :]
+        return "\n".join(new_lines)
+
+    return text
+
+
+def build_nifguide_system_message(
+    current_username: str,
+    nif_progress_df: Optional[pd.DataFrame],
+    user_query: str,
+    prompt_mode: Optional[str] = None,
+) -> str:
+    mode = (prompt_mode or NIF_GUIDE_PROMPT_MODE).strip().lower()
+    if mode not in {"legacy", "compact"}:
+        mode = "compact"
+
+    expected_question_id = infer_expected_nif_question_id(
+        nif_progress_df=nif_progress_df,
+        user_query=user_query,
+    )
+    progress_snapshot = _build_nif_progress_snapshot(nif_progress_df)
+
+    include_all_rules = mode == "legacy"
+    if include_all_rules:
+        focused_rules_df = expert_system_rules.copy()
+    else:
+        focus_indices = _select_nif_focus_rule_indices(expected_question_id, user_query)
+        focused_rules_df = (
+            expert_system_rules.iloc[focus_indices].copy()
+            if focus_indices
+            else expert_system_rules.head(6).copy()
+        )
+
+    rules_markdown = focused_rules_df.to_markdown(index=False)
+    dropdown_block = _build_nif_dropdown_reference_block(
+        focused_rules_df,
+        include_all=include_all_rules,
+    )
+
+    if include_all_rules:
+        glossary_block = str(glossary_and_db_terms_dict)
+    else:
+        glossary_subset = _build_nif_glossary_subset(
+            user_query=user_query,
+            max_items=NIF_GUIDE_MAX_GLOSSARY_TERMS,
+        )
+        if glossary_subset:
+            glossary_block = str(glossary_subset)
+        else:
+            glossary_block = "(No high-signal glossary terms matched this user turn.)"
+
+    return f'''
+            You are an expert in Kellanova's New Item Form (NIF). This form is used
+            to specify new products or variations of existing products. Your role
+            is to guide the user through the 'Requestor - Project Initiation'
+            section of the NIF, which contains the PROJECT_INITIATION_FIELDS listed
+            here:
+                <PROJECT_INITIATION_FIELDS>
+                {list(nif_fields_req_init_template['field_name_and_number'])}
+                </PROJECT_INITIATION_FIELDS>
+
+            {llm_instruction_scope_of_discussion}
+
+            # SESSION CONTEXT
+            - Current user: {current_username}
+            - Prompt mode: {mode}
+            - Expected question ID for this turn: {expected_question_id}
+
+            <NIF_PROGRESS_SNAPSHOT>
+            {progress_snapshot}
+            </NIF_PROGRESS_SNAPSHOT>
+
+            # STRICT ADHERENCE TO RULES
+            You MUST follow these rules without exception:
+            - Process EXACTLY ONE row from STEP_BY_STEP_RULES at a time
+            - NEVER skip ahead or process multiple rows simultaneously
+            - NEVER proceed to the next question until the current row is complete
+            - ALWAYS follow the "Go to" instruction exactly as specified
+            - Do NOT improvise or interpret instructions creatively - follow them literally
+            - In compact prompt mode, treat EXPECTED question ID as authoritative for this turn.
+
+            # INTERACTION WITH THE USER
+            Begin with a simple greeting and state your role.
+
+            You will be told at the start of the conversation whether the user is starting
+            a new NIF or continuing an in-progress NIF.
+
+            If the user is starting a new NIF, start with the first question in the
+            STEP_BY_STEP_RULES.
+
+            If the user is resuming a NIF in progress, use the latest user state in
+            NIF_PROGRESS_SNAPSHOT and continue at the expected question ID.
+
+            When proceeding, follow the QUESTION FLOW PROTOCOL:
+            1. State the current Question ID (e.g., "**Question 2.1:**")
+            2. Ask the question EXACTLY as written in the "Question" column
+            3. Wait for the user's response - do not proceed without it
+               - Exception: if the instructions say this question is not necessary, the user
+                 can submit an empty string or the words "blank", "none", or similar.
+            4. Execute instructions ONLY for the current Question ID
+            5. Call update_nif_progress for each field update
+            6. Only then proceed to the next question
+
+            If the user asks to go back to a previous question, you may do so, but you must
+            follow the instructions again one-at-a-time from that question. DO NOT ASSUME
+            that the answers to subsequent questions are the same as before.
+
+            If the user asks for clarification about a question, refer to the GLOSSARY and
+            provide definitions of relevant terms.
+
+            <STEP_BY_STEP_RULES>
+            {rules_markdown}
+            </STEP_BY_STEP_RULES>
+
+            <GLOSSARY>
+            {glossary_block}
+            </GLOSSARY>
+
+            ## PARSING INSTRUCTIONS (CRITICAL)
+            For each instruction in the "Instructions" column:
+            1. **No Question Required**: If "Question" column says 'None', execute instructions immediately.
+            2. **List of Possible Values**: always show these as a numbered list with one item per line.
+               - If question text itself contains inline comma-separated choices,
+                 do NOT leave them inline; render those choices as numbered list
+                 entries on new lines.
+            3. **Dropdown Lists**: "Display dd: reference list [NAME]"
+               - Look up [NAME] in DROPDOWN REFERENCE LISTS below
+               - Display as numbered list, one item per line
+               - Wait for user selection. If the user answers with a number,
+                 use the item corresponding to that number in the list you provided.
+            4. **Field Updates**: Formatted as "FIELD_NAME" (FIELD_NUMBER)
+               - FIELD_NUMBER is the required parameter for update_nif_progress
+            5. **Value Types**:
+               - <'VALUE'>: Use this EXACT string (without angle brackets)
+               - <FREEFORM>: Use user's literal answer after validation
+            6. **Navigation**: "Go to [Question ID]"
+               - This specifies your NEXT question
+               - If conditional (if/then), follow the matching condition
+               - If no "Go to", proceed to the next row in STEP_BY_STEP_RULES
+            7. **Multiple Fields**:
+               - Call update_nif_progress separately for EACH field
+               - Process in order listed
+
+            ### DROPDOWN REFERENCE LISTS
+            {dropdown_block}
+
+            ### FUNCTION CALLING REQUIREMENTS
+            When calling update_nif_progress:
+            - Call IMMEDIATELY after collecting each field value
+            - Use parameters: LAST_QUESTION_ID, LAST_VALUE, and FIELD_NUMBER (only if specified)
+            - Do NOT proceed until function returns successfully
+            - LAST_VALUE format:
+              * For <'VALUE'>: the exact value without angle brackets
+              * For <FREEFORM>: user's validated literal answer
+
+            # PROHIBITED BEHAVIORS
+            You MUST NOT:
+            - Summarize or skip steps
+            - Ask multiple questions from different rows simultaneously
+            - Assume answers or pre-fill fields
+            - Deviate from "Go to" instructions
+            - Proceed with invalid or unclear user responses
+
+            # SELF-VERIFICATION BEFORE PROCEEDING
+            Before each new question, verify:
+            □ Asked question from current row?
+            □ Received and validated user answer?
+            □ Called update_nif_progress for all required fields?
+            □ Identified correct next Question ID?
+
+            If any item is unchecked, DO NOT PROCEED.
+        '''
+
+
+def refresh_nifguide_task_prompt(session_task, current_username, user_query, nif_progress_df):
+    compact_prompt = build_nifguide_system_message(
+        current_username=current_username,
+        nif_progress_df=nif_progress_df,
+        user_query=user_query,
+        prompt_mode=NIF_GUIDE_PROMPT_MODE,
+    )
+    session_task.system_message = compact_prompt
+    if getattr(session_task, "agent", None) is not None:
+        session_task.agent.system_message = compact_prompt
+
+
+def _message_role_value(msg) -> str:
+    role = getattr(msg, "role", "")
+    return role.value if hasattr(role, "value") else str(role)
+
+
+def trim_session_agent_history(agent, max_messages: int) -> bool:
+    """
+    Keep latest system message plus latest non-system messages.
+    Returns True when a trim occurred.
+    """
+    history = list(getattr(agent, "message_history", []) or [])
+    if max_messages <= 0 or not history:
+        return False
+
+    system_messages = [msg for msg in history if _message_role_value(msg).lower() == "system"]
+    non_system_messages = [msg for msg in history if _message_role_value(msg).lower() != "system"]
+
+    if len(non_system_messages) <= max_messages:
+        return False
+
+    trimmed_non_system = non_system_messages[-max_messages:]
+    if system_messages:
+        trimmed_history = [system_messages[-1]] + trimmed_non_system
+    else:
+        trimmed_history = trimmed_non_system
+
+    agent.message_history = trimmed_history
+    return True
+
+
+def trim_agent_history_for_task(agent, task_name: str) -> bool:
+    if agent is None:
+        return False
+    task_name = _safe_text(task_name)
+    if task_name == "nifguide_task":
+        if not NIF_GUIDE_TRIM_HISTORY:
+            return False
+        return trim_session_agent_history(agent, NIF_GUIDE_HISTORY_WINDOW)
+    if NIF_HISTORY_TRIM_OTHER_TASKS:
+        return trim_session_agent_history(agent, NIF_OTHER_TASK_HISTORY_WINDOW)
+    return False
+
+
+def _history_entry_fingerprint(entry: dict) -> str:
+    role = _safe_text(entry.get("role"))
+    content = _safe_text(entry.get("content"))
+    timestamp = _safe_text(entry.get("timestamp"))
+    function_call = _safe_text(entry.get("function_call"))
+    tool_calls = _safe_text(entry.get("tool_calls"))
+    return "|".join([role, content, timestamp, function_call, tool_calls])
+
+
 # =============================================================================
 #### History management
 # =============================================================================
@@ -724,8 +2108,28 @@ def save_chat_history(message_history, user_email, SESSION_ID):
     else:
         history_array = []
 
-    # Append new entry
-    history_array.extend(history_to_save)
+    if NIF_LONGTERM_HISTORY_DEDUP:
+        existing_fingerprints = set()
+        for entry in history_array:
+            if isinstance(entry, dict):
+                existing_fingerprints.add(_history_entry_fingerprint(entry))
+
+        incremental_entries = []
+        for entry in history_to_save:
+            if not isinstance(entry, dict):
+                continue
+            fp = _history_entry_fingerprint(entry)
+            if fp in existing_fingerprints:
+                continue
+            incremental_entries.append(entry)
+            existing_fingerprints.add(fp)
+
+        history_array.extend(incremental_entries)
+    else:
+        history_array.extend(history_to_save)
+
+    if NIF_LONGTERM_MAX_ENTRIES > 0 and len(history_array) > NIF_LONGTERM_MAX_ENTRIES:
+        history_array = history_array[-NIF_LONGTERM_MAX_ENTRIES:]
 
     # Write back the entire array
     with open(LONGTERM_HISTORY_FILE, 'w') as f:
@@ -1063,6 +2467,104 @@ agent_config_claude35 = lr.ChatAgentConfig(llm=utils.aws_llm_claude35)
 agent_config_claude35_sonnet = lr.ChatAgentConfig(llm=utils.aws_llm_claude35_sonnet)
 agent_config_gptoss = lr.ChatAgentConfig(llm=utils.aws_llm_gptoss)
 
+
+def get_docsearch_agent_config() -> lr.ChatAgentConfig:
+    """
+    Keep docsearch on the same provider configured for vectorstore retrieval.
+    """
+    provider = utils.get_vectorstore_provider()
+    if provider == "openai":
+        openai_api_key = os.getenv("OPENAI_API_KEY", "").strip()
+        if not openai_api_key:
+            raise RuntimeError(
+                "OPENAI_API_KEY is not set. "
+                "Set OPENAI_API_KEY when VECTORSTORE_LLM_PROVIDER=openai."
+            )
+
+        openai_chat_model = os.getenv("OPENAI_CHAT_MODEL", "gpt-4o-mini").strip() or "gpt-4o-mini"
+        openai_base_url = os.getenv("OPENAI_BASE_URL", "").strip()
+        openai_config_kwargs = {
+            "chat_model": openai_chat_model,
+            "api_key": openai_api_key,
+            "temperature": 0.0,
+            "max_output_tokens": 4096,
+            "stream": False,
+        }
+        if openai_base_url:
+            openai_config_kwargs["api_base"] = openai_base_url
+
+        return lr.ChatAgentConfig(llm=lrlm.OpenAIGPTConfig(**openai_config_kwargs))
+
+    return agent_config_claude35_sonnet
+
+
+def get_nifguide_agent_config() -> lr.ChatAgentConfig:
+    """
+    Keep New NIF guide compatible with selected provider.
+    """
+    provider = utils.get_vectorstore_provider()
+    if provider == "openai":
+        openai_api_key = os.getenv("OPENAI_API_KEY", "").strip()
+        if not openai_api_key:
+            raise RuntimeError(
+                "OPENAI_API_KEY is not set. "
+                "Set OPENAI_API_KEY when VECTORSTORE_LLM_PROVIDER=openai."
+            )
+
+        openai_chat_model = (
+            os.getenv("OPENAI_NIFGUIDE_MODEL", "").strip()
+            or os.getenv("OPENAI_CHAT_MODEL", "").strip()
+            or "gpt-4o-mini"
+        )
+        openai_base_url = os.getenv("OPENAI_BASE_URL", "").strip()
+        openai_config_kwargs = {
+            "chat_model": openai_chat_model,
+            "api_key": openai_api_key,
+            "temperature": 0.0,
+            "max_output_tokens": 4096,
+            "stream": False,
+        }
+        if openai_base_url:
+            openai_config_kwargs["api_base"] = openai_base_url
+
+        return lr.ChatAgentConfig(llm=lrlm.OpenAIGPTConfig(**openai_config_kwargs))
+
+    return agent_config_claude35
+
+
+def get_nif_database_agent_config() -> lr.ChatAgentConfig:
+    """
+    Keep Search NIF compatible with the selected provider.
+    """
+    provider = utils.get_vectorstore_provider()
+    if provider == "openai":
+        openai_api_key = os.getenv("OPENAI_API_KEY", "").strip()
+        if not openai_api_key:
+            raise RuntimeError(
+                "OPENAI_API_KEY is not set. "
+                "Set OPENAI_API_KEY when VECTORSTORE_LLM_PROVIDER=openai."
+            )
+
+        openai_chat_model = (
+            os.getenv("OPENAI_SQL_MODEL", "").strip()
+            or os.getenv("OPENAI_CHAT_MODEL", "").strip()
+            or "gpt-4o-mini"
+        )
+        openai_base_url = os.getenv("OPENAI_BASE_URL", "").strip()
+        openai_config_kwargs = {
+            "chat_model": openai_chat_model,
+            "api_key": openai_api_key,
+            "temperature": 0.0,
+            "max_output_tokens": 4096,
+            "stream": False,
+        }
+        if openai_base_url:
+            openai_config_kwargs["api_base"] = openai_base_url
+
+        return lr.ChatAgentConfig(llm=lrlm.OpenAIGPTConfig(**openai_config_kwargs))
+
+    return agent_config_gptoss
+
 # Name of receptionist agent. All subtasks will address responses to this.
 receptionist_name = 'ReceptionistAgent'
 
@@ -1310,168 +2812,19 @@ def create_nifguide_task(
         CURRENT_USERNAME:str='Unknown'     # The name of the current user. Need this in the definition even if it is not used to keep consistency for get_session_task().
         ,NIF_DF:object=None     # A dataframe created with create_active_user_nif_progress_data(). Can be updated later.
     ):
-    nifguide_agent = nif_guide_update_agent(agent_config_claude35, NIF_DF)
-    
+    nifguide_agent = nif_guide_update_agent(get_nifguide_agent_config(), NIF_DF)
+
+    system_message = build_nifguide_system_message(
+        current_username=CURRENT_USERNAME,
+        nif_progress_df=NIF_DF if isinstance(NIF_DF, pd.DataFrame) else None,
+        user_query="",
+        prompt_mode=NIF_GUIDE_PROMPT_MODE,
+    )
+
     nifguide_task = lr.Task(
         nifguide_agent
         ,name='NIFGuideAgent'
-        ,system_message = f'''
-            You are an expert in Kellanova's New Item Form (NIF). This form is used
-            to specify new products or variations of existing products. Your role
-            is to guide the user through the 'Requestor - Project Initiation'
-            section of the NIF, which contains the PROJECT_INITIATION_FIELDS listed
-            here:
-                <PROJECT_INITIATION_FIELDS>
-                {list(nif_fields_req_init_template['field_name_and_number'])}
-                </PROJECT_INITIATION_FIELDS>
-    
-            {llm_instruction_scope_of_discussion}
-    
-            # STRICT ADHERENCE TO RULES
-            You MUST follow these rules without exception:
-            - Process EXACTLY ONE row from STEP_BY_STEP_RULES at a time
-            - NEVER skip ahead or process multiple rows simultaneously
-            - NEVER proceed to the next question until the current row is complete
-            - ALWAYS follow the "Go to" instruction exactly as specified
-            - Do NOT improvise or interpret instructions creatively - follow them literally
-        '''
-            # # STATE MANAGEMENT
-            # At each step, track your position:
-            # - Display: "Current Question: [Question ID]"
-            # - After completion: "✓ Question [ID] complete → Moving to [Next ID]"
-        f'''
-            # INTERACTION WITH THE USER
-            Begin with a simple greeting and state your role.
-            
-            You will be told at the start of the conversation whether the user is starting
-            a new NIF or continuing an in-progress NIF.
-        '''
-            # Ask the user to click one of the buttons above to indicate whether they want
-            # to start a new NIF or continue an in-progress NIF and WAIT FOR THE RESPONSE.
-            # Do not say anything else.
-        f'''
-            If the user is starting a new NIF, start with the first question in the
-            STEP_BY_STEP_RULES.
-    
-            If the user is resuming a NIF in progress, you will be told which question ID
-            was last answered and the last answer that was given. Go to the row in the
-            STEP_BY_STEP_RULES for the question ID that was last answered and follow the
-            instructions according to the last answer that was given.
-    
-            When proceeding, follow the QUESTION FLOW PROTOCOL:
-    
-            ## QUESTION FLOW PROTOCOL
-            1. State the current Question ID (e.g., "**Question 2.1:**")
-            2. Ask the question EXACTLY as written in the "Question" column
-            3. Wait for the user's response - do not proceed without it
-                - Exception: if the instructions say this question is not necessary, the user
-                can submit an empty string or the words "blank", "none", or similar.
-            4. Execute instructions ONLY for the current Question ID
-            5. Call update_nif_progress for each field update
-        '''
-            # 6. Confirm: "✓ Recorded [FIELD_NAME]. Moving to Question [NEXT_ID]."
-        f'''
-            Only then proceed to the next question.
-    
-            If the user asks to go back to a previous question, you may do so, but you must
-            follow the instructions again one-at-a-time from that question. DO NOT ASSUME
-            that the answers to subsequent questions are the same as before.
-    
-            If the user asks for clarification about a question, refer to the GLOSSARY and
-            provide the definitions of relevant terms.
-    
-            <STEP_BY_STEP_RULES>
-            {expert_system_rules_md}
-            </STEP_BY_STEP_RULES>
-    
-            <GLOSSARY>
-            {glossary_and_db_terms_dict}
-            </GLOSSARY>
-    
-            ## PARSING INSTRUCTIONS (CRITICAL)
-            For each instruction in the "Instructions" column:
-    
-            1. **No Question Required**: If "Question" column says 'None'
-               - Execute instructions immediately without asking
-               
-            2. **List of Possible Values**: always show these as a numbered list
-               with one item per line.
-    
-            3. **Dropdown Lists**: "Display dd: reference list [NAME]"
-               - Look up [NAME] in DROPDOWN REFERENCE LISTS below
-               - Display as numbered list, one item per line
-               - Wait for user selection. If the user answers with a number,
-               use the item corresponding to that number in the list you provided.
-    
-            4. **Field Updates**: Formatted as "FIELD_NAME" (FIELD_NUMBER)
-               - FIELD_NUMBER is the required parameter for update_nif_progress
-    
-            5. **Value Types**:
-               - <'VALUE'>: Use this EXACT string (without angle brackets)
-               - <FREEFORM>: Use user's literal answer after validation
-    
-            6. **Navigation**: "Go to [Question ID]"
-               - This specifies your NEXT question
-               - If conditional (if/then), follow the matching condition
-               - If no "Go to", proceed to the next row in the STEP_BY_STEP_RULES
-    
-            7. **Multiple Fields**: If updating multiple fields
-               - Call update_nif_progress separately for EACH field
-               - Process in order listed
-        '''
-        #### Reference lists
-        f'''
-            ### DROPDOWN REFERENCE LISTS
-            <LIM_USERS>
-            {ddref_lim_users_md}
-            </LIM_USERS>
-    
-            <RDL_CATEGORIES>
-            {ddref_rdl_categories_md}
-            </RDL_CATEGORIES>
-    
-            <MATERIAL_PREFIX>
-            {ddref_material_prefix_md}
-            </MATERIAL_PREFIX>
-    
-            <ADDITIONAL_PACKAGING_LAUNCH>
-            {ddref_addnl_packaging_md}
-            </ADDITIONAL_PACKAGING_LAUNCH>
-    
-            <PRIVATE_LABEL>
-            {ddref_private_label_md}
-            </PRIVATE_LABEL>
-    
-            <DESIGNATED_CUSTOMER_NAME>
-            {ddref_desig_cust_md}
-            </DESIGNATED_CUSTOMER_NAME>
-    
-            ### FUNCTION CALLING REQUIREMENTS
-            When calling update_nif_progress:
-            - Call IMMEDIATELY after collecting each field value
-            - Use parameters: LAST_QUESTION_ID, LAST_VALUE, and FIELD_NUMBER (only if specified)
-            - Do NOT proceed until function returns successfully
-            - LAST_VALUE format:
-              * For <'VALUE'>: the exact value without angle brackets
-              * For <FREEFORM>: user's validated literal answer
-    
-            # PROHIBITED BEHAVIORS
-            You MUST NOT:
-            - Summarize or skip steps
-            - Ask multiple questions from different rows simultaneously
-            - Assume answers or pre-fill fields
-            - Deviate from "Go to" instructions
-            - Proceed with invalid or unclear user responses
-    
-            # SELF-VERIFICATION BEFORE PROCEEDING
-            Before each new question, verify:
-            □ Asked question from current row?
-            □ Received and validated user answer?
-            □ Called update_nif_progress for all required fields?
-            □ Identified correct next Question ID?
-    
-            If any item is unchecked, DO NOT PROCEED.
-        '''
+        ,system_message=system_message
         # ,interactive=True     # For testing
     
         # For use in Dash, setting interactive=False so the task exits after each round.
@@ -1483,7 +2836,10 @@ def create_nifguide_task(
     
         ,inf_loop_cycle_len=1   # Stop after a single repetition
     )
-    
+    nifguide_task._nifguide_prompt_context = {
+        "prompt_mode": NIF_GUIDE_PROMPT_MODE,
+    }
+
     return nifguide_task
         
 nifguide_task = create_nifguide_task()
@@ -1527,6 +2883,143 @@ class query_brands_db_tool(lr.agent.ToolMessage):
         except sqlite3.OperationalError as err:     # If there's an error, tell the LLM about it.
             return f"The following error occured: {str(err)}"
 
+
+def normalize_nif_sql_query(sql_query: str) -> str:
+    sql_query_clean = (sql_query or "").strip()
+    if sql_query_clean.startswith("```"):
+        sql_query_clean = re.sub(r"^```(?:sql)?\s*", "", sql_query_clean, flags=re.IGNORECASE)
+        sql_query_clean = re.sub(r"\s*```$", "", sql_query_clean)
+        sql_query_clean = sql_query_clean.strip()
+    return sql_query_clean
+
+
+def execute_nif_select_query(sql_query: str, max_rows: int | None = None) -> dict:
+    """
+    Execute read-only SQL on NIFS database and return structured result.
+    """
+    if max_rows is None:
+        max_rows = NIF_DB_MAX_ROWS
+
+    sql_query_clean = normalize_nif_sql_query(sql_query)
+    result = {
+        "sql": sql_query_clean,
+        "columns": [],
+        "rows": [],
+        "row_count": 0,
+        "displayed_row_count": 0,
+        "truncated": False,
+        "error": None,
+    }
+
+    query_upper = sql_query_clean.upper()
+    if not sql_query_clean:
+        result["error"] = "SQL query is empty."
+        return result
+    if not (query_upper.startswith("SELECT") or query_upper.startswith("WITH")):
+        result["error"] = "Only SELECT/CTE (WITH) queries are allowed for security reasons."
+        return result
+
+    db = None
+    try:
+        db = sqlite3.connect(f"file:{nif_database}?mode=ro", uri=True)
+        db.row_factory = sqlite3.Row
+        c = db.cursor()
+        c.execute(sql_query_clean)
+        rows = c.fetchall()
+
+        result["row_count"] = len(rows)
+        selected_rows = rows[:max_rows]
+        result["displayed_row_count"] = len(selected_rows)
+        result["truncated"] = len(rows) > max_rows
+
+        if c.description:
+            result["columns"] = [desc[0] for desc in c.description]
+
+        serializable_rows = []
+        for row in selected_rows:
+            row_dict = dict(row)
+            row_serializable = {}
+            for key, value in row_dict.items():
+                if isinstance(value, (str, int, float, bool)) or value is None:
+                    row_serializable[key] = value
+                else:
+                    row_serializable[key] = str(value)
+            serializable_rows.append(row_serializable)
+
+        result["rows"] = serializable_rows
+        return result
+
+    except sqlite3.OperationalError as err:
+        result["error"] = (
+            f"SQL Operational Error: {str(err)}\n\n"
+            "Please check your table names, column names, and SQL syntax."
+        )
+        return result
+    except sqlite3.DatabaseError as err:
+        result["error"] = f"Database Error: {str(err)}"
+        return result
+    except Exception as err:
+        result["error"] = f"Unexpected Error: {type(err).__name__}: {str(err)}"
+        return result
+    finally:
+        if db:
+            db.close()
+
+
+def format_nif_query_result_for_llm(
+    result: dict,
+    preview_rows: int = 10,
+    include_row_preview: bool = True,
+) -> str:
+    """
+    Convert structured query result to concise text for the agent response.
+    """
+    if not isinstance(result, dict):
+        return "Unexpected Error: Query result payload is invalid."
+
+    if result.get("error"):
+        return str(result["error"])
+
+    row_count = int(result.get("row_count", 0))
+    if row_count == 0:
+        return "Query executed successfully but returned no results."
+
+    rows = result.get("rows", [])
+    displayed_row_count = int(result.get("displayed_row_count", len(rows)))
+    output = f"Query returned {row_count} row(s)."
+
+    if include_row_preview and preview_rows > 0:
+        output += "\n\n"
+        if displayed_row_count <= preview_rows:
+            for i, row in enumerate(rows[:preview_rows], 1):
+                output += f"Row {i}:\n"
+                for key, value in row.items():
+                    output += f"  {key}: {value}\n"
+                output += "\n"
+        else:
+            output += f"First {preview_rows} rows:\n"
+            for i, row in enumerate(rows[:preview_rows], 1):
+                output += f"Row {i}: {row}\n"
+            output += f"\n... and {row_count - preview_rows} more rows.\n"
+    else:
+        columns = result.get("columns", []) or []
+        if columns:
+            output += f"\nColumns: {', '.join(columns)}"
+
+    if result.get("truncated"):
+        if include_row_preview and preview_rows > 0:
+            output += (
+                f"\nNote: showing {displayed_row_count} of {row_count} rows "
+                f"(display limit reached)."
+            )
+        else:
+            output += (
+                f"\nNote: table shows first {displayed_row_count} of {row_count} rows "
+                f"(display limit reached)."
+            )
+
+    return output.strip()
+
 class query_nif_db_tool_2(lr.agent.ToolMessage):
     """
     Enhanced SQLite database query tool with better error handling,
@@ -1535,7 +3028,7 @@ class query_nif_db_tool_2(lr.agent.ToolMessage):
     request: str = "query_nif_db_2"
     purpose: str = """Run a SELECT query on the NIF database and return formatted results.
     Only SELECT queries are allowed for safety. Returns results as a list of dictionaries
-    with column names as keys. Limit results to 100 rows by default."""
+    with column names as keys. Limit results to up to NIF_DB_MAX_ROWS (default 2000)."""
 
     SQL_QUERY: str  # The SQL query to execute (SELECT only)
 
@@ -1546,69 +3039,11 @@ class query_nif_db_tool_2(lr.agent.ToolMessage):
         Returns:
             str: Formatted query results or error description
         """
-        # Security: Only allow SELECT queries
-        query_upper = self.SQL_QUERY.strip().upper()
-        if not query_upper.startswith('SELECT'):
-            return "Error: Only SELECT queries are allowed for security reasons."
-
-        # Warn about queries without LIMIT
-        # This is causing the agent to resubmit every query. Removing for now.
-        # if 'LIMIT' not in query_upper:
-        #     return "Warning: Please add a LIMIT clause to your query to avoid retrieving too many rows. Example: 'SELECT * FROM table LIMIT 100'"
-
-        db = None
-        try:
-            # Connect in read-only mode
-            db = sqlite3.connect(f"file:{nif_database}?mode=ro", uri=True)
-            db.row_factory = sqlite3.Row  # Enable column name access
-            c = db.cursor()
-
-            # Execute query
-            c.execute(self.SQL_QUERY)
-            rows = c.fetchall()
-
-            # Handle empty results
-            if not rows:
-                return "Query executed successfully but returned no results."
-
-            # Convert to list of dictionaries for better readability
-            results = []
-            for row in rows:
-                results.append(dict(row))
-
-            # Format output
-            row_count = len(results)
-            output = f"Query returned {row_count} row(s):\n\n"
-
-            # For small result sets, show full data
-            if row_count <= 10:
-                for i, row in enumerate(results, 1):
-                    output += f"Row {i}:\n"
-                    for key, value in row.items():
-                        output += f"  {key}: {value}\n"
-                    output += "\n"
-            else:
-                # For larger result sets, show summary
-                output += f"First 5 rows:\n"
-                for i, row in enumerate(results[:5], 1):
-                    output += f"Row {i}: {row}\n"
-                output += f"\n... and {row_count - 5} more rows.\n"
-
-            return output.strip()
-
-        except sqlite3.OperationalError as err:
-            return f"SQL Operational Error: {str(err)}\n\nPlease check your table names, column names, and SQL syntax."
-
-        except sqlite3.DatabaseError as err:
-            return f"Database Error: {str(err)}"
-
-        except Exception as err:
-            return f"Unexpected Error: {type(err).__name__}: {str(err)}"
-
-        finally:
-            # Always close the database connection
-            if db:
-                db.close()
+        global last_nif_sql_query, last_nif_query_result
+        structured_result = execute_nif_select_query(self.SQL_QUERY, max_rows=NIF_DB_MAX_ROWS)
+        last_nif_sql_query = structured_result.get("sql")
+        last_nif_query_result = structured_result
+        return format_nif_query_result_for_llm(structured_result, preview_rows=10)
 
 # A companion tool for schema exploration
 class get_db_schema_tool(lr.agent.ToolMessage):
@@ -1676,6 +3111,343 @@ class get_db_schema_tool(lr.agent.ToolMessage):
 # =============================================================================
 #### Config
 # =============================================================================
+def _normalize_status_values(status_rows):
+    values = []
+    for row in status_rows or []:
+        if isinstance(row, (list, tuple)):
+            if row:
+                values.append(str(row[0]))
+        elif row is not None:
+            values.append(str(row))
+    return [val for val in values if val.strip()]
+
+
+def _select_nif_core_columns(column_list_cln):
+    """
+    Keep prompt schema compact by prioritizing commonly queried columns.
+    """
+    column_type_map = {str(name): str(col_type) for name, col_type in (column_list_cln or [])}
+    preferred_columns = [
+        "Title",
+        "Status_Name",
+        "Status",
+        "Detailed Status",
+        "Created",
+        "Created_By",
+        "LIM",
+        "Material_Number",
+        "Brief Material Description",
+        "Material_Description",
+        "Project Description",
+        "Product Type",
+        "Project Type",
+        "COUNTRY",
+        "Package UPC",
+        "PDF Link",
+    ]
+
+    core_columns = [(name, column_type_map[name]) for name in preferred_columns if name in column_type_map]
+    if len(core_columns) < 12:
+        already_selected = {name for name, _ in core_columns}
+        for name, col_type in column_list_cln or []:
+            if name in already_selected:
+                continue
+            core_columns.append((str(name), str(col_type)))
+            already_selected.add(name)
+            if len(core_columns) >= 12:
+                break
+
+    return core_columns[:20]
+
+
+def get_relevant_db_abbreviations(query_text, max_items=None):
+    """
+    Dynamically select a small abbreviation subset relevant to the current query.
+    """
+    if max_items is None:
+        max_items = NIF_DB_PROMPT_MAX_ABBREVIATIONS
+
+    try:
+        max_items = int(max_items)
+    except Exception:
+        max_items = NIF_DB_PROMPT_MAX_ABBREVIATIONS
+    max_items = max(0, min(max_items, 200))
+    if max_items == 0:
+        return {}
+
+    query_lc = str(query_text or "").strip().lower()
+    if not query_lc:
+        return {}
+    query_tokens = set(re.findall(r"[a-z0-9]+", query_lc))
+
+    def _to_text(value):
+        if isinstance(value, pd.Series):
+            if value.empty:
+                return ""
+            value = value.iloc[0]
+        elif isinstance(value, (list, tuple)):
+            if len(value) == 0:
+                return ""
+            value = value[0]
+        try:
+            if pd.isna(value):
+                return ""
+        except Exception:
+            pass
+        return str(value).strip()
+
+    scored_items = []
+    for desc, abbr in db_abbreviations_dict.items():
+        desc_text = _to_text(desc)
+        abbr_text = _to_text(abbr)
+        if not desc_text or not abbr_text:
+            continue
+
+        desc_lc = desc_text.lower()
+        abbr_lc = abbr_text.lower()
+        desc_tokens = set(re.findall(r"[a-z0-9]+", desc_lc))
+        abbr_tokens = set(re.findall(r"[a-z0-9]+", abbr_lc))
+
+        score = 0
+        if desc_lc in query_lc:
+            score += 8
+        if abbr_lc in query_lc:
+            score += 8
+        if query_tokens and desc_tokens:
+            score += 2 * len(query_tokens.intersection(desc_tokens))
+        if query_tokens and abbr_tokens:
+            score += 3 * len(query_tokens.intersection(abbr_tokens))
+
+        if score > 0:
+            scored_items.append((score, len(desc_text), desc_text, abbr_text))
+
+    if not scored_items:
+        return {}
+
+    scored_items.sort(key=lambda item: (-item[0], item[1], item[2].lower()))
+    selected = {}
+    seen_desc = set()
+    for _, _, desc_text, abbr_text in scored_items:
+        desc_key = desc_text.lower()
+        if desc_key in seen_desc:
+            continue
+        selected[desc_text] = abbr_text
+        seen_desc.add(desc_key)
+        if len(selected) >= max_items:
+            break
+
+    return selected
+
+
+def build_nif_database_system_message(
+    table_name,
+    core_columns,
+    status_values,
+    country_abbreviations,
+    current_username,
+    relevant_abbreviations,
+    sql_mode_override,
+):
+    relevant_abbreviations = relevant_abbreviations or {}
+
+    def _sql_escape(value):
+        return str(value).replace("'", "''")
+
+    abbreviation_templates = []
+    for i, (desc, abbr) in enumerate(relevant_abbreviations.items(), start=1):
+        if i > 8:
+            break
+        desc_text = str(desc or "").strip().lower()
+        abbr_text = str(abbr or "").strip().upper()
+        if not desc_text or not abbr_text:
+            continue
+        desc_sql = _sql_escape(desc_text)
+        abbr_sql = _sql_escape(abbr_text)
+        abbreviation_templates.append(
+            (
+                f"- {desc_text} / {abbr_text}:\n"
+                f"  (LOWER(COALESCE(\"Brief Material Description\", '')) LIKE '%{desc_sql}%' "
+                f"OR LOWER(COALESCE(\"Material_Description\", '')) LIKE '%{desc_sql}%' "
+                f"OR UPPER(COALESCE(\"Brief Material Description\", '')) LIKE '% {abbr_sql} %' "
+                f"OR UPPER(COALESCE(\"Material_Description\", '')) LIKE '% {abbr_sql} %')"
+            )
+        )
+    if abbreviation_templates:
+        abbreviation_sql_examples = "\n".join(abbreviation_templates)
+    else:
+        abbreviation_sql_examples = "- (No abbreviation templates for this query.)"
+
+    return f'''
+        You are NIFDatabaseAgent. Convert user questions into one SQLite query
+        against table "{table_name}" and answer strictly from query results.
+
+        Scope:
+        - Only handle questions answerable from this NIF database.
+        - For out-of-scope questions, respond:
+          "I can only help with questions about the NIF database."
+
+        LATENCY MODE (MANDATORY):
+        - Do not greet.
+        - For in-scope database questions, first action must be exactly one call
+          to 'query_nif_db_2'.
+        - Do not ask clarifying questions before first query unless impossible to
+          map to schema.
+        - Never SELECT *; select only required columns.
+        - If LIMIT is needed, use LIMIT {NIF_DB_MAX_ROWS} by default unless user
+          explicitly asks for fewer rows.
+        - Superlative intent rule: if user asks for "most", "top", "highest",
+          "lowest", "least", "bottom", "maximum", "minimum", "biggest", or "smallest",
+          you MUST use ORDER BY on the relevant metric and apply LIMIT:
+          - use DESC for most/top/highest/maximum/biggest
+          - use ASC for least/lowest/bottom/minimum/smallest
+          - use LIMIT 1 for singular asks (e.g., "what LIM has the most approved NIFs")
+          - use LIMIT N for "top N" or "bottom N" asks.
+        - If no rows, do one broader rewrite attempt only; then return
+          "no matching records found".
+        - Final user answer: max 5 lines, no SQL, no internal reasoning, no
+          repeated rows, and no fabricated values.
+
+        Schema context:
+        - Core columns (name, type): {core_columns}
+        - Status_Name values: {status_values}
+        - Country abbreviations: {country_abbreviations}
+        - Relevant abbreviations for this query only: {relevant_abbreviations}
+
+        SQL rules:
+        - Wrap column names in double quotes.
+        - Text match guidance:
+          - For text comparisons in WHERE, use wildcard contains search:
+            LIKE '%value%'.
+          - For case-insensitive search, use LOWER(COALESCE(<col>, '')) LIKE '%value%'.
+          - For text search in descriptions, always check both:
+            "Brief Material Description" and "Material_Description".
+          - For person-name filters, do NOT require exact full-string matching.
+            Split the input full name into tokens and match each token
+            independently using lowercase token contains matching with LIKE,
+            so order can vary (first last, last first, last, first).
+            Example:
+            LOWER(COALESCE("Created_By", '')) LIKE '%marie%'
+            AND LOWER(COALESCE("Created_By", '')) LIKE '%smith%'
+
+        - Abbreviation guidance:
+          - For abbreviation predicates, use UPPER() and token-space pattern only:
+            UPPER(COALESCE("Material_Description", '')) LIKE '% RKT %'
+          - If a query term maps to an abbreviation, you MUST include BOTH:
+            1) full-text term match using LOWER(... LIKE '%term%')
+            2) abbreviation token match using UPPER(... LIKE '% ABBR %')
+            Use them together in the same OR group.
+          - Never use abbreviation-only matching when a mapped full-text term is
+            available.
+
+        - Date comparison guidance:
+          - Reference date for relative comparisons: 2026-03-02
+          - Temporal policy: use half-open intervals [start, end) to avoid overlap.
+          - Interpret "last/next month|quarter|year|week" as complete periods.
+          - Interpret "past/future N units" as rolling windows relative to the
+            reference date.
+          - SQLite date filter form:
+            date(<date_col>) >= date('YYYY-MM-DD')
+            AND date(<date_col>) < date('YYYY-MM-DD')
+          - For quarter/month/year grouping use strftime('%Y', ...),
+            strftime('%m', ...), and month arithmetic.
+          - If the question has no clear date expression, avoid assuming a
+            date filter.
+          - Support date range filters for past/future, multiple
+            months/quarters/years, and numeric spans (e.g., last 2 years,
+            next 2 quarters).
+          - Temporal columns (5, as provided):
+            NIFS.Created, NIFS.Created_By, NIFS.First_Ship_Date,
+            NIFS.MF_Approval_Start_Date, NIFS.Modified.
+          - IMPORTANT: NIFS.Created_By is a person-name field for tokenized text
+            matching, not date math.
+
+        - Arithmetic and function guidance:
+          - Arithmetic operators allowed: +, -, *, /.
+          - Arithmetic on table columns must use numeric columns only.
+          - HAVING and WHERE may compare arithmetic expressions if source columns
+            follow numeric/date rules.
+          - Do not invent derived expressions when required source columns are
+            missing.
+          - If a requested expression cannot be mapped confidently to schema
+            columns, return empty SQL with low confidence.
+          - Allowed SQLite functions only:
+            ABS, AVG, CAST, COALESCE, COUNT, DATE, DATETIME, JULIANDAY, LOWER,
+            MAX, MIN, NULLIF, ROUND, STRFTIME, SUM, TIME, UPPER.
+          - Allowed date-shift units: day, week, month, quarter, year.
+          - Quarter shift = 3 months.
+          - SQLite date-shift forms:
+            - Calculated column:
+              date(<date_col>, '+N day|month|year')
+              week => '+(7*N) day', quarter => '+(3*N) month'
+            - WHERE/HAVING compare:
+              date(<date_col>, '+N month') >= date('YYYY-MM-DD')
+            - Date grouping:
+              strftime('%Y', <date_col>), strftime('%m', <date_col>)
+          - Numeric columns (13, as provided):
+            NIFS.CAT_End, NIFS.GCF_End, NIFS.GCF_Start, NIFS.LIM_Launch_Date,
+            NIFS.MAT_GRP_1, NIFS.MFLC_End, NIFS.MFLC_Start, NIFS.MF_Nbr_Returns,
+            NIFS.Material_Number, NIFS.PROD_HIER, NIFS.PR_PT_CA, NIFS.RDQ_End,
+            NIFS.index.
+
+        - For grouped "who has the most/least/lowest/bottom" questions:
+          GROUP BY the entity column, ORDER BY aggregate with direction based on intent,
+          then LIMIT 1 (or N).
+          Example (most):
+          SELECT "LIM", COUNT(*) AS cnt
+          FROM "NIFS"
+          WHERE LOWER("Status_Name") LIKE '%approved%'
+          GROUP BY "LIM"
+          ORDER BY cnt DESC
+          LIMIT 1
+          Example (least/bottom):
+          SELECT "LIM", COUNT(*) AS cnt
+          FROM "NIFS"
+          WHERE LOWER("Status_Name") LIKE '%approved%'
+          GROUP BY "LIM"
+          ORDER BY cnt ASC
+          LIMIT 1
+        - For person names in "Created_By", try both orders:
+          LOWER("Created_By") IN (LOWER('Marie Smith'), LOWER('Smith, Marie'))
+        - For empty checks use both NULL and empty string:
+          "Package UPC" IS NOT NULL AND "Package UPC" != ''
+        - For user-self questions, use "Created_By" with current logged-in user:
+          {current_username}
+
+        Abbreviation SQL templates for this query (copy/edit directly):
+        {abbreviation_sql_examples}
+
+        {sql_mode_override}
+    '''
+
+
+def refresh_nif_database_task_prompt(session_task, current_username, user_query):
+    """
+    Rebuild compact SQL-agent prompt with dynamic abbreviation subset per query.
+    """
+    prompt_context = getattr(session_task, "_nif_prompt_context", None)
+    if not isinstance(prompt_context, dict):
+        return
+
+    relevant_abbreviations = get_relevant_db_abbreviations(
+        user_query,
+        max_items=NIF_DB_PROMPT_MAX_ABBREVIATIONS,
+    )
+
+    compact_prompt = build_nif_database_system_message(
+        table_name=prompt_context.get("table_name", "NIFS"),
+        core_columns=prompt_context.get("core_columns", []),
+        status_values=prompt_context.get("status_values", []),
+        country_abbreviations=prompt_context.get("country_abbreviations", {}),
+        current_username=current_username,
+        relevant_abbreviations=relevant_abbreviations,
+        sql_mode_override=prompt_context.get("sql_mode_override", ""),
+    )
+
+    session_task.system_message = compact_prompt
+    if getattr(session_task, "agent", None) is not None:
+        session_task.agent.system_message = compact_prompt
+
+
 def create_nif_database_task(
         CURRENT_USERNAME:str='Unknown'              # The name of the current user
         ,TOOL:object=query_nif_db_tool_2      # A Langroid lr.agent.ToolMessage object.
@@ -1689,8 +3461,8 @@ def create_nif_database_task(
     # 3.5 Sonnet seems to be making up numbers
     # nif_database_agent = lr.ChatAgent(agent_config_claude35_sonnet)
     
-    # GPT-OSS is pretty good
-    nif_database_agent = lr.ChatAgent(agent_config_gptoss)
+    # GPT-OSS is pretty good on Bedrock; switch to OpenAI config when provider=openai
+    nif_database_agent = lr.ChatAgent(get_nif_database_agent_config())
     
     nif_database_agent.enable_message(TOOL)
     
@@ -1698,188 +3470,53 @@ def create_nif_database_task(
     table_name = 'NIFS'
     column_list = utils.run_query(nif_database, f"SELECT * FROM pragma_table_info('{table_name}');")
     column_list_cln = [(info[1], info[2]) for info in column_list]      # Keep column names and types
+    core_columns = _select_nif_core_columns(column_list_cln)
     
     status_name_distinct_values = utils.run_query(nif_database, f"select distinct Status_Name from NIFS")
+    status_values = _normalize_status_values(status_name_distinct_values)
     
     country_abbreviations = {
         "United States":"US"
         ,"Canada":"CA"
         ,"Mexico":"MX"
     }
-    
+
+    if NIF_DB_FORCE_FIRST_PASS_SQL:
+        sql_mode_override = '''
+            # EXECUTION MODE OVERRIDE (FIRST-PASS SQL)
+
+            Ignore any prior instruction to begin with a greeting or ask clarification
+            before querying.
+
+            For user inputs that could reasonably map to the NIF database, your FIRST
+            action must be to call 'query_nif_db_2' with exactly one best-effort
+            SELECT/WITH query.
+
+            Rules for first-pass SQL:
+            - Do not ask follow-up questions before the first query.
+            - Use one query only.
+            - Keep results bounded. If you include LIMIT, use LIMIT {NIF_DB_MAX_ROWS}
+              unless the user explicitly requests a smaller number of rows.
+            - If user wording is ambiguous, make a reasonable assumption, run the query,
+              and then state the assumption in your response.
+        '''
+    else:
+        sql_mode_override = ''
+
+    system_message = build_nif_database_system_message(
+        table_name=table_name,
+        core_columns=core_columns,
+        status_values=status_values,
+        country_abbreviations=country_abbreviations,
+        current_username=CURRENT_USERNAME,
+        relevant_abbreviations={},
+        sql_mode_override=sql_mode_override,
+    )
+
     nif_database_task = lr.Task(
         nif_database_agent
         ,name='NIFDatabaseAgent'
-        ,system_message=f'''
-            You are an agent specialized in formulating SQLite queries based on
-            plain language questions.
-    
-            You have access to a SQLite database with information on Kellanova's New
-            Item Forms (NIFs) that have been submitted. Your role is to answer the
-            user's questions by querying this database.
-            
-            You can submit queries to the database by using the 'query_nif_db_2'
-            function/tool with argument SQL_QUERY being your query.
-
-            The database contains a table called '{table_name}' with one row per NIF.
-            It contains the following columns, shown as ('column_name', 'column_type'):
-                {column_list_cln}.
-    
-            You can ONLY answer questions that can be addressed by querying this
-            database. If asked about topics outside this scope (general company
-            information, other databases, unrelated topics), politely redirect:
-                "I can only help with questions about the NIF database."
-    
-            # INTERACTING WITH THE USER
-    
-            Begin with a simple greeting and state your role. Ask what the user would
-            like to know.
-    
-            1. When you receive a question, first determine whether you have enough
-            information to query the database. If not, ask for clarification.
-    
-            2. Once you have enough information, construct a query using SQLite syntax
-            and submit it using the 'query_nif_db_2' function with argument SQL_QUERY
-            being your query.
-            
-                - See the sections below entitled QUERY CONSTRUCTION RULES and NOTES
-                ABOUT IMPORTANT COLUMNS for constructing your query.
-    
-            3. Reply with a concise answer to the user's question based STRICTLY on the
-            result of the query. DO NOT MAKE UP NUMBERS.
-    
-            # QUERY CONSTRUCTION RULES
-    
-            - IMPORTANT: construct a SINGLE QUERY to answer the user's question as you
-            only have one opportunity to respond.
-    
-            - Always wrap column names in double quotes.
-    
-            - When filtering on a column of type TEXT, always construct the query to be
-            case-insensitive by using the LOWER() function.
-    
-            - When a query includes a person's name, always try the query twice, reversing
-            first and last names and including a comma as in:
-                ```sql
-                WHERE LOWER("Created_By") IN (LOWER('Marie Smith'), LOWER('Smith, Marie'))
-                ```
-    
-            - The current logged in user is {CURRENT_USERNAME}. If the user asks about
-            their own NIFs (e.g., "What is my most recent NIF?"), do the following:
-                1. If the username is "Unknown" or an obvious placeholder, apologize and
-                ask them for their name.
-                2. Once you have a real username, search the "Created_By" column for that
-                name, following the rules for querying names.
-                3. If there are no records for that username, let the user know. Ask if
-                they would like to search for a different username.
-                4. If records exist for that username, proceed with the appropriate query
-                to answer the question.
-        
-            - Always first check how many records exist for a given query. If a record
-            exists but the requested field is empty, let the user know.
-    
-            - If the 'query_nif_db_2' function does not return anything, do the following:
-                1. Try reformulating your query and resubmit.
-                2. If the query still returns nothing, inform the user and ask them to
-                clarify what they are looking for.
-    
-            - When answering summary or aggregate questions such as "how many NIFs
-            have been submitted", always answer two ways:
-                1. considering all items in the database and
-                2. considering only items with Status_Name='Approved'
-    
-            - When checking if fields are empty, test for both NULL and empty string
-                ```sql
-                WHERE "Package UPC" IS NOT NULL AND "Package UPC" != ''
-                ```
-    
-            ## ERROR HANDLING
-            - If a query returns an error, attempt a corrected query.
-            - If no results are returned, reformulate your query once and try again.
-            - If no results are returned a second time, inform the user and ask for clarification.
-    
-            ## STATUS OF A NIF
-    
-            If the user asks about the status of a NIF, after filtering appropriately,
-            return the following fields formatted as a bulleted list:
-                - "Title"
-                - "Status_Name"
-                - "Status"
-                - "Detailed Status"
-                - "Created_By"
-                - "Created"
-                - "LIM"
-                - "Material_Number"
-                - "Brief Material Description"
-        '''
-                # - "PDF Link"
-        f'''
-            # NOTES ABOUT IMPORTANT COLUMNS
-    
-            - "LIM" (TEXT): the name of the Logistics Innovation Manager assigned to
-            this NIF, who is responsible for reviewing and approving it.
-    
-            - "Created" (TEXT): date and time this NIF was created, in the format
-            'YYYY-MM-DD HH:MM:SS'. When users ask about time periods (e.g., "last month",
-            "this year"), calculate the appropriate date range based on the current date,
-            which is {dt.datetime.now().strftime('%Y-%m-%d')}.
-    
-            - "Created_By" (TEXT): name of the person who created this NIF. When
-            searching in this field, try reversing first and last names and
-            including a comma such as 'Marie Smith' and 'Smith, Marie'.
-    
-            - "Status_Name" (TEXT): the current status of this NIF. Can take these
-            possible values: {status_name_distinct_values}.
-    
-            - "Status" (TEXT): detailed status of this NIF.
-    
-            - "Material_Number" (FLOAT): the material number of the product involved
-            in this NIF. Also known as SAP Material Number. If the question
-            includes hyphens, search for the material number without them.
-    
-            - "Brief Material Description" (TEXT): a description of the material in
-            words.
-    
-            - "Material_Description" (TEXT): a description of the material using
-            abbreviations. When searching for a material description, always do the
-            following:
-                - Use a %LIKE% operator to capture similar entries.
-                - Check all the following columns using OR conditions:
-                    ["Brief Material Description", "Material_Description", "Title"].
-                - Also search for abbreviations for common words using this lookup:
-                    {db_abbreviations_dict_small}.
-    
-            - "Title" (TEXT): project title which may also contain product type and
-            material description.
-    
-            - "Project Description" (TEXT): the project this NIF is associated with.
-            A single project may have multiple NIFs and involve multiple materials.
-    
-            - "Product Type" (TEXT): the product type for this NIF.
-    
-            - "Project Type" (TEXT): the project type for this NIF.
-    
-            - "COUNTRY" (TEXT): the country for this NIF. Note country names use
-            these abbreviations {country_abbreviations}.
-
-            - "PDF Link" (TEXT): the PDF file associated with this NIF. Always format
-            this as a hyperlink like so: [PDF](<PDF Link>).
-    
-            # HELPFUL BEHAVIORS
-    
-            - Column Reference:
-                If the user asks what information is available, list the important columns
-                above with brief descriptions.
-    
-            - Proactive Suggestions:
-                If the user's question is vague, suggest specific fields they might want
-                to filter or view.
-    
-            - Follow-up Questions:
-                After providing results, offer relevant follow-up options (e.g., "Would
-                you like to see more details about any of these NIFs?" or "Would you like
-                to filter these results further?")
-        '''
+        ,system_message=system_message
         # For use in Dash, setting interactive=False so the task exits after each round.
         # This is necessary to get a response to print in Dash.
         ,interactive=False
@@ -1887,6 +3524,13 @@ def create_nif_database_task(
         # Setting restart=False so that message history persists when task exits.
         ,restart=False
     )
+    nif_database_task._nif_prompt_context = {
+        "table_name": table_name,
+        "core_columns": core_columns,
+        "status_values": status_values,
+        "country_abbreviations": country_abbreviations,
+        "sql_mode_override": sql_mode_override,
+    }
     return nif_database_task
             
 nif_database_task = create_nif_database_task()
@@ -1931,47 +3575,129 @@ class retrieve_and_answer_tool(lr.agent.ToolMessage):
     QUERY:str   # Plain text query
 
     def handle(self):
-        # Get relevant documents (paths to page images)
-        retrieved_docs_all_collections = utils.query_vectorstore(
-            FOLDER_PATH=utils.VECTORSTORE_FOLDER
-            ,QUERY=self.QUERY    # Plain text query. Will be embedded with EMBEDDING_MODEL before submitting to vectorstore.
-            ,N_RESULTS=2
+        vectorstore_provider = utils.get_vectorstore_provider()
+        embedding_model = utils.get_cached_retrieval_embedding_function(
+            provider=vectorstore_provider
         )
+
+        # Get relevant documents (paths to page images)
+        try:
+            retrieved_docs_all_collections = utils.query_vectorstore(
+                FOLDER_PATH=utils.VECTORSTORE_FOLDER
+                ,QUERY=self.QUERY    # Plain text query. Will be embedded with EMBEDDING_MODEL before submitting to vectorstore.
+                ,N_RESULTS=DOCSEARCH_RESULTS_PER_COLLECTION
+                ,EMBEDDING_MODEL=embedding_model
+                ,USE_CACHE=True
+            )
+        except Exception as err:
+            return (
+                "I couldn't access the training-resource index. "
+                "Please ensure the local vectorstore is built and populated, then try again.\n\n"
+                f"Details: {err}"
+            )
+
+        selected_hits = utils.select_vectorstore_hits(
+            retrieved_docs_all_collections,
+            max_total_results=DOCSEARCH_MAX_TOTAL_PAGES,
+            max_distance=DOCSEARCH_MAX_DISTANCE,
+        )
+
+        if len(selected_hits) < DOCSEARCH_MIN_HITS:
+            return (
+                "I could not find enough relevant training-resource pages for that question.\n\n"
+                "Try broader terms (for example: `NIF training deck`, `BOM training`, "
+                "`material master`, `new hire guide`) and submit again."
+            )
+
         # Parse retrieved docs
         retrieved_page_images = []      # Initialize
         retrieved_page_links = []       # Initialize
 
-        # Loop over collections searched
-        for i, CLCT in enumerate(retrieved_docs_all_collections['documents']):
-            # Loop over documents returned from each collection
-            for j, DOC in enumerate(retrieved_docs_all_collections['documents'][i]):
-                # Get link to page image
-                ret_image = retrieved_docs_all_collections['documents'][i][j]
-                image_file_without_path = os.path.basename(ret_image)
-                image_file_new_path = f"{ASSETS_PAGE_IMAGES_FOLDER}/{image_file_without_path}"
-                retrieved_page_images.append(image_file_new_path)
+        for hit in selected_hits:
+            ret_image = str(hit.get("document", "") or "").strip()
+            if not ret_image:
+                continue
+            image_file_without_path = os.path.basename(ret_image)
+            image_file_new_path = os.path.join(ASSETS_PAGE_IMAGES_FOLDER, image_file_without_path)
+            if not os.path.exists(image_file_new_path):
+                if os.path.exists(ret_image):
+                    image_file_new_path = ret_image
+                else:
+                    continue
+            retrieved_page_images.append(image_file_new_path)
 
-                # Get link to page in PDF viewer
-                doc_name = retrieved_docs_all_collections['metadatas'][i][j]['document_name']
-                page_num = retrieved_docs_all_collections['metadatas'][i][j]['page_number']
-                encoded_doc_name = urllib.parse.quote(doc_name)
-                link_to_page = f"{base_path_docs}/{encoded_doc_name}#page={page_num}"
-                link_as_markdown = f"[{doc_name}, p{page_num}]({link_to_page})"
-                retrieved_page_links.append(link_as_markdown)
+            metadata = hit.get("metadata") or {}
+            if not isinstance(metadata, dict):
+                metadata = {}
+            doc_name = str(metadata.get("document_name") or image_file_without_path)
+            page_num = str(metadata.get("page_number") or "?")
+            encoded_doc_name = urllib.parse.quote(doc_name)
+            link_to_page = f"{base_path_docs}/{encoded_doc_name}#page={page_num}"
+
+            distance = hit.get("distance")
+            if isinstance(distance, (float, int)):
+                link_label = f"{doc_name}, p{page_num} (score={distance:.4f})"
+            else:
+                link_label = f"{doc_name}, p{page_num}"
+            link_as_markdown = f"[{link_label}]({link_to_page})"
+            retrieved_page_links.append(link_as_markdown)
+
+        if len(retrieved_page_images) == 0:
+            return (
+                "I could not find relevant training-resource pages for that question.\n\n"
+                "Try broader terms (for example: `NIF training deck`, `BOM training`, "
+                "`material master`, `new hire guide`) and submit again."
+            )
 
         formatted_sources_list = formatted_list(retrieved_page_links)
 
         # Prepare the prompt for the image query.
+        if DOCSEARCH_STRICT_GROUNDING:
+            grounding_rules = '''
+            Grounding rules (strict):
+            - Use only information visible in the provided pages.
+            - Do not use outside knowledge or assumptions.
+            - If the pages are insufficient, unclear, or conflicting, reply exactly:
+              "I don't have enough evidence in the retrieved training pages to answer that confidently."
+            '''
+        else:
+            grounding_rules = '''
+            If the pages are insufficient, say you could not find enough evidence.
+            Do not make up details.
+            '''
+
         image_query_prompt = f'''
-            You will be given images of pages from documents. Use them to answer the user's question.
+            You are answering a user question using images of retrieved training-document pages.
 
-            If the images do not contain information relevant to the user's question, say so;
-            do not make up an answer.
+            {grounding_rules}
 
-            Provide a concise answer based on the images. Do NOT include any source citations,
-            document names, or page numbers in your answer. Just the factual answer.
+            Response requirements:
+            - Keep answer concise and factual.
+            - Do NOT include source citations, document names, or page numbers.
+            - Prefer direct wording from the page content when possible.
         '''
-        answer_from_images = utils.query_multiple_images_bedrock(retrieved_page_images, image_query_prompt, self.QUERY)
+        if vectorstore_provider == "openai":
+            try:
+                answer_from_images = utils.query_multiple_images_openai(
+                    retrieved_page_images, image_query_prompt, self.QUERY
+                )
+            except Exception as err:
+                return (
+                    "I found relevant training-resource pages, but I couldn't run the OpenAI vision step.\n\n"
+                    "Check OPENAI_VISION_MODEL, OPENAI_API_KEY, and OPENAI_BASE_URL in .env.\n\n"
+                    f"Details: {err}\n\nSources used:\n{formatted_sources_list}"
+                )
+        else:
+            try:
+                answer_from_images = utils.query_multiple_images_bedrock(
+                    retrieved_page_images, image_query_prompt, self.QUERY
+                )
+            except Exception as err:
+                return (
+                    "I found relevant training-resource pages, but I couldn't run the Bedrock vision step.\n\n"
+                    "Check AWS credentials/region and Bedrock model access in .env.\n\n"
+                    f"Details: {err}\n\nSources used:\n{formatted_sources_list}"
+                )
 
         # Generate the final Markdown string including answer and sources
         final_output_string = answer_from_images
@@ -2051,7 +3777,7 @@ def create_nif_docsearch_task(
         CURRENT_USERNAME:str='Unknown'              # The name of the current user
         ,TOOL:object=retrieve_and_answer_tool      # A Langroid lr.agent.ToolMessage object.
     ):
-    nif_docsearch_agent = lr.ChatAgent(agent_config_claude35_sonnet)
+    nif_docsearch_agent = lr.ChatAgent(get_docsearch_agent_config())
     # nif_docsearch_agent.enable_message(RecipientTool)
     nif_docsearch_agent.enable_message(TOOL)
     
@@ -2068,6 +3794,9 @@ def create_nif_docsearch_task(
             function. This function will return a single string containing
             the answer to the user's question followed by a list of relevant
             documents formatted as Markdown links.
+
+            Never add facts that are not in the tool output. If evidence is
+            insufficient, return the tool's abstention message as-is.
         
             If the 'retrieve_and_answer' function does not return anything, say
             "I apologize, I cannot find any relevant results in the documents."
@@ -2156,6 +3885,8 @@ app.layout = dbc.Container(
     # dcc.Store (id='user_session_chat'),   # May not be necessary - langroid task tracks this
     dcc.Store(id='nif_progress_data_json'),
     dcc.Store(id='active_task_name'),       # Can only store strings in dcc.Store, so these are names rather than task objects
+    dcc.Store(id='nif_query_result_store'),
+    dcc.Store(id='nif_llm_prompt_store'),
     dcc.Download(id='download-nif-data'),
 
     # Interval component pings to keep connection alive
@@ -2381,6 +4112,111 @@ app.layout = dbc.Container(
                             dbc.Spinner(children=[
                                 dcc.Markdown(id="results-markdown",),
                             ], size="md", color="#000000", fullscreen=False),   # End of Spinner
+                            html.Div(
+                                id="nif-query-output-container",
+                                style={"display": "none", "marginTop": "12px"},
+                                children=[
+                                    html.Div(
+                                        style={
+                                            "display": "flex",
+                                            "justifyContent": "space-between",
+                                            "alignItems": "center",
+                                            "marginBottom": "6px",
+                                            "gap": "8px",
+                                        },
+                                        children=[
+                                            html.P(
+                                                "NIFDatabaseAgent Query Output",
+                                                style={
+                                                    "fontWeight": "600",
+                                                    "marginBottom": "0",
+                                                    "color": "#0F2548",
+                                                },
+                                            ),
+                                            dbc.Button(
+                                                "Show LLM Prompt",
+                                                id="show-nif-llm-prompt-button",
+                                                n_clicks=0,
+                                                size="sm",
+                                                color="secondary",
+                                                style={"fontSize": "12px"},
+                                            ),
+                                        ],
+                                    ),
+                                    html.P(
+                                        id="nif-query-summary",
+                                        style={
+                                            "fontSize": "12px",
+                                            "marginBottom": "8px",
+                                            "color": "#444",
+                                        },
+                                    ),
+                                    dash_table.DataTable(
+                                        id="nif-query-table",
+                                        columns=[],
+                                        data=[],
+                                        page_action="none",
+                                        virtualization=True,
+                                        sort_action="native",
+                                        filter_action="native",
+                                        style_table={
+                                            "width": "100%",
+                                            "minHeight": "220px",
+                                            "height": "220px",
+                                            "overflowX": "auto",
+                                            "maxHeight": "380px",
+                                            "overflowY": "auto",
+                                            "border": "1px solid #ddd",
+                                        },
+                                        style_header={
+                                            "backgroundColor": "#F5F7FA",
+                                            "fontWeight": "700",
+                                            "whiteSpace": "normal",
+                                            "height": "auto",
+                                        },
+                                        style_cell={
+                                            "textAlign": "left",
+                                            "fontSize": "12px",
+                                            "padding": "6px",
+                                            "minWidth": "100px",
+                                            "maxWidth": "360px",
+                                            "whiteSpace": "normal",
+                                            "height": "auto",
+                                        },
+                                    ),
+                                ],
+                            ),
+                            dbc.Modal(
+                                [
+                                    dbc.ModalHeader(
+                                        dbc.ModalTitle("Prompt Sent to NIFDatabaseAgent LLM")
+                                    ),
+                                    dbc.ModalBody(
+                                        html.Pre(
+                                            id="nif-llm-prompt-modal-body",
+                                            style={
+                                                "whiteSpace": "pre-wrap",
+                                                "fontFamily": "monospace",
+                                                "fontSize": "12px",
+                                                "marginBottom": "0",
+                                            },
+                                        ),
+                                        style={"maxHeight": "70vh", "overflowY": "auto"},
+                                    ),
+                                    dbc.ModalFooter(
+                                        dbc.Button(
+                                            "Close",
+                                            id="nif-llm-prompt-modal-close-button",
+                                            className="ms-auto",
+                                            n_clicks=0,
+                                        )
+                                    ),
+                                ],
+                                id="nif-llm-prompt-modal",
+                                is_open=False,
+                                size="xl",
+                                scrollable=True,
+                            ),
                             ],
                             className="p-2",
                             ),
@@ -2538,6 +4374,11 @@ app.layout = dbc.Container(
                                                ),
                                     dbc.Button("Download file",
                                                id="nif-export-button",
+                                               className="mb-1 human-chat-buttons",
+                                               style=BUTTON_STYLE
+                                               ),
+                                    dbc.Button("Reload NIF Rules",
+                                               id="nif-reload-config-button",
                                                className="mb-1 human-chat-buttons",
                                                style=BUTTON_STYLE
                                                ),
@@ -2700,6 +4541,44 @@ app.layout = dbc.Container(
 def keepalive(n):
     return ''  # Just trigger to keep connection alive
 
+
+@app.callback(
+    Output('simple_message', 'children', allow_duplicate=True),
+    Input("nif-reload-config-button", "n_clicks"),
+    State('active_task_name', 'data'),
+    prevent_initial_call=True,
+)
+def reload_nif_config_from_ui(n_clicks, active_task_name):
+    if n_clicks is None or n_clicks == 0:
+        raise dash.exceptions.PreventUpdate
+
+    try:
+        summary = reload_nif_runtime_configuration()
+        message = (
+            "NIF rules reloaded successfully. "
+            f"Rules: {summary.get('rules_count', 0)}, "
+            f"Glossary terms: {summary.get('glossary_count', 0)}, "
+            f"Dropdown lists: {summary.get('dropdown_lists', 0)}, "
+            f"Legacy sessions refreshed: {summary.get('legacy_tasks_refreshed', 0)}."
+        )
+
+        rag_error = summary.get("rag_build_error")
+        if rag_error:
+            message += f" RAG rebuild warning: {rag_error}"
+        else:
+            message += " RAG artifacts refreshed."
+
+        if active_task_name == 'nifguide_task':
+            message += " Continue chatting to use the updated rules immediately."
+
+        return message
+    except Exception as err:
+        return (
+            "Failed to reload NIF rules at runtime. "
+            f"Details: {err}"
+        )
+
+
 @app.callback(
     # 1. Output for the radio button container children
     Output('select-demo-questions-style-div', 'children'),
@@ -2846,7 +4725,7 @@ def initialize_and_switch_buttons(selected_value, user_data):
     # ----------------------------------------------------
     # Case 4: Other modules that are active
     # ----------------------------------------------------
-    elif selected_value == 'Search NIF':
+    elif selected_value in ['Search NIF', 'Get started on training resources']:
         return (
             no_update,              # Don't change NIF step by step buttons above
             no_update,              # Don't change selected question
@@ -2941,6 +4820,168 @@ def reset_on_x_or_escape(is_open, current_radio_value):
 
     raise dash.exceptions.PreventUpdate
 
+
+def _nif_rag_state_key(session_id: str, user_email: str) -> tuple:
+    return ("nif_rag", str(user_email or ""), str(session_id or ""))
+
+
+def reset_nif_rag_state(session_id: str, user_email: str = "") -> None:
+    """
+    Reset in-memory state/history for RAG v2 New NIF session.
+    """
+    if user_email:
+        key = _nif_rag_state_key(session_id, user_email)
+        nif_rag_session_state.pop(key, None)
+        nif_rag_message_history.pop(key, None)
+        return
+
+    sid_text = str(session_id or "")
+    keys_to_remove = [k for k in list(nif_rag_session_state.keys()) if len(k) >= 3 and k[2] == sid_text]
+    for key in keys_to_remove:
+        nif_rag_session_state.pop(key, None)
+        nif_rag_message_history.pop(key, None)
+
+
+def clear_nif_rag_user_state(user_email: str) -> None:
+    email_text = str(user_email or "")
+    keys_to_remove = [
+        k for k in list(nif_rag_session_state.keys()) if len(k) >= 3 and k[1] == email_text
+    ]
+    for key in keys_to_remove:
+        nif_rag_session_state.pop(key, None)
+        nif_rag_message_history.pop(key, None)
+
+
+def _save_nif_rag_history_turn(
+    user_email: str,
+    session_id: str,
+    user_message: str,
+    assistant_message: str,
+) -> None:
+    key = _nif_rag_state_key(session_id, user_email)
+    history = nif_rag_message_history.get(key, [])
+    history.append(LLMMessage(role="user", content=str(user_message or "")))
+    history.append(LLMMessage(role="assistant", content=str(assistant_message or "")))
+
+    if NIF_GUIDE_TRIM_HISTORY:
+        max_messages = max(4, NIF_GUIDE_HISTORY_WINDOW * 2)
+        if len(history) > max_messages:
+            history = history[-max_messages:]
+
+    nif_rag_message_history[key] = history
+    save_chat_history(history, user_email, session_id)
+
+
+def execute_nif_rag_turn(
+    user_input: str,
+    user_nif_progress_df: pd.DataFrame,
+    session_id: str,
+    user_email: str,
+) -> tuple[str, pd.DataFrame]:
+    if nif_rag_knowledge_pack is None:
+        return (
+            "RAG v2 New NIF engine is not available because the knowledge pack failed to build. "
+            "Switch NIF_CHAT_ENGINE=legacy or rebuild startup artifacts."
+        ), user_nif_progress_df
+
+    state_key = _nif_rag_state_key(session_id, user_email)
+    state = nif_rag_session_state.get(state_key, {})
+
+    result = nif_rag.run_turn(
+        pack=nif_rag_knowledge_pack,
+        user_input=str(user_input or ""),
+        progress_df=user_nif_progress_df,
+        field_number_to_column=nif_field_number_to_column,
+        session_state=state,
+        max_auto_steps=NIF_RAG_MAX_AUTO_STEPS,
+        retrieval_top_k=NIF_RAG_RETRIEVAL_TOP_K,
+    )
+
+    updated_df = result.get("updated_progress_df", user_nif_progress_df)
+    next_state = result.get("session_state", state)
+    response_text = str(result.get("response_text", "") or "").strip()
+    retrieval_hits = result.get("retrieval_hits", []) or []
+
+    nif_rag_session_state[state_key] = next_state
+
+    if extra_output_bool and retrieval_hits:
+        response_text = (
+            response_text
+            + "\n\n---\n"
+            + f"RAG Context Hits: {len(retrieval_hits)} "
+            + "(rule/glossary/dropdown)"
+        )
+
+    _save_nif_rag_history_turn(
+        user_email=user_email,
+        session_id=session_id,
+        user_message=user_input,
+        assistant_message=response_text,
+    )
+    return response_text, updated_df
+
+
+def build_nif_resume_submit_text(
+    user_nif_progress_df: pd.DataFrame,
+    last_question_answered: str,
+    last_answer_given: str,
+    engine_mode: str = "legacy",
+) -> str:
+    """
+    Build compact resume prompt to avoid sending full table back to the LLM.
+    """
+    engine_mode_normalized = str(engine_mode or "legacy").strip().lower()
+
+    if NIF_RESUME_VERBOSE_CONTEXT:
+        return (
+            "Resume the user's NIF in progress.\n"
+            f"They last answered question ID '{last_question_answered}' with '{last_answer_given}'.\n"
+            "Here are all the values for their NIF in progress:\n"
+            f"{user_nif_progress_df.to_markdown()}"
+        )
+
+    summary_lines = []
+    max_fields = NIF_RESUME_SUMMARY_FIELDS
+    if max_fields > 0 and isinstance(user_nif_progress_df, pd.DataFrame) and not user_nif_progress_df.empty:
+        df = user_nif_progress_df.copy()
+        for internal_col in ["_agentref_last_question_answered", "_agentref_last_answer_given"]:
+            if internal_col in df.columns:
+                df = df.drop(columns=[internal_col])
+
+        row = df.iloc[0]
+        for col_name, value in row.items():
+            value_str = str(value).strip()
+            if not value_str:
+                continue
+            if value_str in {"<NOT YET DETERMINED>", "nan", "None"}:
+                continue
+            if len(value_str) > 120:
+                value_str = value_str[:117] + "..."
+            summary_lines.append(f"- {col_name}: {value_str}")
+            if len(summary_lines) >= max_fields:
+                break
+
+    summary_block = "\n".join(summary_lines) if summary_lines else "- (No filled NIF field values yet.)"
+    if engine_mode_normalized == "rag_v2":
+        return (
+            "NIF_RAG_RESUME: Resume NIF from prior chat.\n"
+            f"Last answered question ID: {last_question_answered}\n"
+            f"Last answer given: {last_answer_given}\n"
+            "Use dataframe state as source of truth.\n"
+            "Compact field snapshot:\n"
+            f"{summary_block}"
+        )
+
+    return (
+        "Resume the user's NIF in progress.\n"
+        f"Last answered question ID: {last_question_answered}\n"
+        f"Last answer given: {last_answer_given}\n"
+        "Use the agent's dataframe state as source of truth.\n"
+        "Compact field snapshot:\n"
+        f"{summary_block}"
+    )
+
+
 # NIF file selection, NIF loading, and closes the modal
 @app.callback(
     # Outputs for the main application to update chat/data
@@ -2958,11 +4999,12 @@ def reset_on_x_or_escape(is_open, current_radio_value):
     # States for data needed for the loading logic
     State('file-dropdown', 'value'),
     State('user-store', 'data'),
+    State('user_session_id', 'data'),
     State('submit-button', 'n_clicks'),
     State("load-nif-modal", "is_open"),
     prevent_initial_call=True
 )
-def load_nif_from_modal(n_submit, selected_nif_file, user_data, current_clicks, is_open):
+def load_nif_from_modal(n_submit, selected_nif_file, user_data, active_sid, current_clicks, is_open):
 
     if n_submit is None or n_submit == 0:
         raise dash.exceptions.PreventUpdate
@@ -2974,7 +5016,7 @@ def load_nif_from_modal(n_submit, selected_nif_file, user_data, current_clicks, 
     if not selected_nif_file:
         display_text = 'Error: Please select a file from the dropdown to load.'
         # Keep modal open
-        return no_update, no_update, no_update, display_text, no_update
+        return no_update, no_update, no_update, display_text, no_update, dash.no_update
 
     # File path construction
     user_nif_progress_dir = get_user_nif_progress_dir(active_user_email)
@@ -2996,12 +5038,21 @@ def load_nif_from_modal(n_submit, selected_nif_file, user_data, current_clicks, 
         new_clicks = (current_clicks or 0) + 1
         f_name, f_ext = selected_nif_file.rsplit('.', 1)
 
-        submit_text = f'''Resume the user's NIF in progress.
-        They last answered question ID '{last_question_answered}' with '{last_answer_given}'.
-        Here are all the values for their NIF in progress:
-        {user_nif_progress_df.to_markdown()}
-        '''
-        display_text = f"Prior NIF '{f_name}' loaded successfully. Submitting resume request to agent."
+        submit_text = build_nif_resume_submit_text(
+            user_nif_progress_df=user_nif_progress_df,
+            last_question_answered=str(last_question_answered),
+            last_answer_given=str(last_answer_given),
+            engine_mode=NIF_CHAT_ENGINE,
+        )
+        if NIF_CHAT_ENGINE == "rag_v2":
+            reset_nif_rag_state(active_sid, active_user_email)
+        if NIF_CHAT_ENGINE == "rag_v2":
+            display_text = (
+                f"Prior NIF '{f_name}' loaded successfully. "
+                "Submitting resume request to New NIF RAG v2 engine."
+            )
+        else:
+            display_text = f"Prior NIF '{f_name}' loaded successfully. Submitting resume request to agent."
 
         return (
             submit_text,         # Human chat area
@@ -3109,7 +5160,13 @@ def update_textarea_and_trigger_submit_chat(selected_question, current_clicks, u
 
     if selected_question == 'NEW_NIF_CHAT':
         active_task_name = 'nifguide_task'
-        display_text = ''
+        display_text = (
+            "New NIF RAG v2 engine is active."
+            if NIF_CHAT_ENGINE == "rag_v2"
+            else ""
+        )
+        if NIF_CHAT_ENGINE == "rag_v2":
+            reset_nif_rag_state(active_sid, active_user_email)
 
         # Use submit_text to give the agent an indication of where to start
         submit_text = "Start a new NIF with field 'LIM'"
@@ -3241,23 +5298,21 @@ def update_textarea_and_trigger_submit_chat(selected_question, current_clicks, u
     # Search NIF activated
     if selected_question == 'Search NIF':
         active_task_name = 'nif_database_task'
-        display_text = ''
-        submit_text = "Hello!"
-
-        # Update n_clicks for submit button
-        new_clicks = (current_clicks or 0) + 1
+        display_text = "Search NIF module is ready. Enter your question and click Submit."
 
         return (
-            submit_text,        # Human chat area
-            new_clicks,         # Submit button
+            no_update,          # Human chat area
+            no_update,          # Submit button
             no_update,          # NIF progress data
             active_task_name,   # Active task name
             display_text,       # Simple message
         )
 
     if selected_question == 'Get started on training resources':
-        active_task_name = 'vectorstore_task'
-        display_text = "Training resources module is not yet available."
+        active_task_name = 'nif_docsearch_task'
+        display_text = ''
+        submit_text = "What training resources are available for NIF and what are the key topics they cover?"
+        new_clicks = (current_clicks or 0) + 1
 
         # Display base set of reference links
         '''
@@ -3272,8 +5327,8 @@ def update_textarea_and_trigger_submit_chat(selected_question, current_clicks, u
             RX documentation
         '''
         return (
-            no_update,      # Human chat area
-            no_update,      # Submit button
+            submit_text,    # Human chat area
+            new_clicks,     # Submit button
             no_update,      # NIF progress data
             active_task_name,      # Active task name
             display_text,    # Simple message
@@ -3293,6 +5348,8 @@ def update_textarea_and_trigger_submit_chat(selected_question, current_clicks, u
     Output("results-markdown", "children", allow_duplicate=True),
     Output('nif_progress_data_json', 'data', allow_duplicate=True),
     Output("human-chat-text-area", "value", allow_duplicate=True),
+    Output("nif_query_result_store", "data", allow_duplicate=True),
+    Output("nif_llm_prompt_store", "data", allow_duplicate=True),
 
     # State("socketio", "socketId"),
     Input("submit-button", "n_clicks"),
@@ -3319,23 +5376,47 @@ def chat_bot(n_sub, human_chat_value, user_data, sid, user_nif_progress_json, ac
         active_user_name = user_data.get('name', 'User')
         active_user_email = user_data.get('email', 'user@email.com')
 
+    session_task = None
+    session_agent = None
+
     # Get or create user-specific task based on active task
-    if active_task_name == 'nifguide_task':
-        session_task = get_session_task('nifguide_task', sid, active_user_name)
+    try:
+        if active_task_name == 'nifguide_task':
+            # Read NIF progress data
+            user_nif_progress_df = pd.read_json(user_nif_progress_json, orient='split')
 
-        # Read NIF progress data
-        user_nif_progress_df = pd.read_json(user_nif_progress_json, orient='split')
+            if NIF_CHAT_ENGINE == "rag_v2" and nif_rag_knowledge_pack is not None:
+                session_task = None
+            else:
+                session_task = get_session_task('nifguide_task', sid, active_user_name)
+                # Update user task to use user_nif_progress_df
+                session_task.agent.set_dataframe(user_nif_progress_df)
 
-        # Update user task to use user_nif_progress_df
-        session_task.agent.set_dataframe(user_nif_progress_df)
+        elif active_task_name == 'nif_database_task':
+            session_task = get_session_task('nif_database_task', sid, active_user_name)
 
-    if active_task_name == 'nif_database_task':
-        session_task = get_session_task('nif_database_task', sid, active_user_name)
-        
-    if active_task_name == 'vectorstore_task':
-        session_task = get_session_task(vectorstore_task, sid, active_user_name)
+        elif active_task_name == 'nif_docsearch_task':
+            # Retrieval module runs tool directly in callback to avoid an extra
+            # orchestration LLM hop that can fail before retrieval executes.
+            session_task = None
 
-    session_agent = session_task.agent
+        else:
+            return (
+                "No active module selected. Please pick a starter question first.",
+                no_update,
+                no_update,
+                no_update,
+                None,
+            )
+    except Exception as err:
+        return (
+            "I couldn't initialize the selected module. "
+            "Please verify credentials and vectorstore setup, then try again.\n\n"
+            f"Details: {err}"
+        ), no_update, no_update, no_update, None
+
+    if session_task is not None:
+        session_agent = session_task.agent
 
     # if socket_id == None:
     #     if global_socket_id == None:
@@ -3350,12 +5431,142 @@ def chat_bot(n_sub, human_chat_value, user_data, sid, user_nif_progress_json, ac
 
     # Submitting question/system text updates
     if ctx.triggered_id == "submit-button":
+        nif_query_result_data = None
+        nif_llm_prompt_data = None
+        expected_nifguide_qid = ""
+
+        if active_task_name == 'nif_docsearch_task':
+            try:
+                full_response = retrieve_and_answer_tool(QUERY=human_chat_value).handle()
+            except Exception as err:
+                full_response = (
+                    "I couldn't run training-resource retrieval.\n\n"
+                    "Please verify vectorstore and model credentials, then try again.\n\n"
+                    f"Details: {err}"
+                )
+
+            if not full_response or not str(full_response).strip():
+                full_response = (
+                    "I couldn't find relevant results in the training-resource index. "
+                    "Please try a broader query."
+                )
+
+            full_response = str(full_response).replace('DONE.', '').replace('DONE', '')
+
+            if extra_output_bool:
+                full_response = f"<DocRetrievalAgent>         {full_response}          (Session ID: {sid})"
+
+            if not extra_output_bool:
+                full_response = remove_tool_calls(full_response)
+
+            return full_response, no_update, '', None, None
+
+        if (
+            active_task_name == 'nifguide_task'
+            and NIF_CHAT_ENGINE == "rag_v2"
+            and nif_rag_knowledge_pack is not None
+        ):
+            try:
+                full_response, user_nif_progress_df = execute_nif_rag_turn(
+                    user_input=human_chat_value,
+                    user_nif_progress_df=user_nif_progress_df,
+                    session_id=sid,
+                    user_email=active_user_email,
+                )
+            except Exception as err:
+                full_response = (
+                    "I couldn't complete your request in NIF RAG mode.\n\n"
+                    "Switch NIF_CHAT_ENGINE=legacy to restore the prior path.\n\n"
+                    f"Details: {err}"
+                )
+
+            if extra_output_bool:
+                full_response = f"<NIFGuideRAGAgent>         {full_response}          (Session ID: {sid})"
+
+            full_response = format_nifguide_choices_multiline(full_response)
+            user_nif_progress_json = user_nif_progress_df.to_json(orient='split')
+            return full_response, user_nif_progress_json, '', None, None
+
         # Did turns=1 break user nif progress df update? YES!!
         # session_task.run(human_chat_value, session_id=sid, turns=1)    # Turns=1 ensures the agent doesn't get into a loop
         # session_task.run(human_chat_value, session_id=sid, turns=10)    # Turns=10 ensures the agents can complete their back and forth
 
-        session_task.run(human_chat_value, session_id=sid)
+        if active_task_name == 'nifguide_task':
+            try:
+                refresh_nifguide_task_prompt(
+                    session_task=session_task,
+                    current_username=active_user_name,
+                    user_query=human_chat_value,
+                    nif_progress_df=user_nif_progress_df,
+                )
+                expected_nifguide_qid = infer_expected_nif_question_id(
+                    nif_progress_df=user_nif_progress_df,
+                    user_query=human_chat_value,
+                )
+            except Exception as prompt_err:
+                print(f"Warning: Failed to refresh NIF guide prompt: {prompt_err}")
+
+        elif active_task_name == 'nif_database_task':
+            global last_nif_sql_query, last_nif_query_result
+            last_nif_sql_query = None
+            last_nif_query_result = None
+            nif_llm_prompt_data = build_nif_llm_prompt_payload(
+                session_task=session_task,
+                user_prompt=human_chat_value,
+                session_id=sid,
+            )
+            try:
+                refresh_nif_database_task_prompt(
+                    session_task=session_task,
+                    current_username=active_user_name,
+                    user_query=human_chat_value,
+                )
+            except Exception as prompt_err:
+                print(f"Warning: Failed to refresh NIF database prompt: {prompt_err}")
+
+        try:
+            if active_task_name == 'nifguide_task':
+                session_task.run(
+                    human_chat_value,
+                    session_id=sid,
+                    turns=NIF_GUIDE_TURNS_PER_SUBMIT,
+                )
+            elif active_task_name == 'nif_database_task' and NIF_DB_FORCE_FIRST_PASS_SQL:
+                session_task.run(
+                    human_chat_value,
+                    session_id=sid,
+                    turns=NIF_DB_FIRST_PASS_TURNS,
+                )
+            else:
+                session_task.run(human_chat_value, session_id=sid)
+        except Exception as err:
+            if active_task_name == 'nif_database_task':
+                failure_hint = (
+                    "For Search NIF, this usually means model credentials/provider "
+                    "config is invalid."
+                )
+            elif active_task_name == 'nif_docsearch_task':
+                failure_hint = (
+                    "For training resources, this usually means Bedrock/OpenAI "
+                    "credentials, model access, or endpoint configuration is invalid."
+                )
+            else:
+                failure_hint = (
+                    "This usually means model credentials, provider selection, or "
+                    "endpoint configuration is invalid."
+                )
+            error_message = (
+                "I couldn't complete your request due to a model/connectivity error.\n\n"
+                f"{failure_hint}\n\n"
+                f"Details: {err}"
+            )
+            if active_task_name == 'nifguide_task':
+                user_nif_progress_json = user_nif_progress_df.to_json(orient='split')
+                return error_message, user_nif_progress_json, '', None, None
+            return error_message, no_update, '', None, nif_llm_prompt_data
+
         last_assistant_message = session_agent.last_message_with_role(Role.ASSISTANT)
+        function_args = None
 
         # Extract assistant output safely across plain responses and tool-call envelopes.
         # SQL tool calls often do not have a "content" argument, so fall back to message content.
@@ -3364,14 +5575,109 @@ def chat_bot(n_sub, human_chat_value, user_data, sid, user_nif_progress_json, ac
         else:
             full_response = last_assistant_message.content
             function_call = getattr(last_assistant_message, "function_call", None)
-            function_args = getattr(function_call, "arguments", None)
-            if isinstance(function_args, dict) and 'content' in function_args:
-                full_response = function_args['content']
+            function_args_raw = getattr(function_call, "arguments", None)
+            function_args = parse_function_arguments(function_args_raw)
+
+            if active_task_name == 'nif_database_task':
+                content_from_args = None
+                sql_from_args = None
+                if isinstance(function_args, dict):
+                    content_from_args = function_args.get('content')
+                    sql_from_args = function_args.get("SQL_QUERY")
+
+                # 1) Prefer non-empty final content from orchestration tool calls.
+                if isinstance(content_from_args, str) and content_from_args.strip():
+                    full_response = content_from_args
+
+                # 2) If no content, but SQL is present, execute SQL tool directly.
+                elif isinstance(sql_from_args, str) and sql_from_args.strip():
+                    try:
+                        full_response = query_nif_db_tool_2(SQL_QUERY=sql_from_args).handle()
+                    except Exception as err:
+                        full_response = f"Search NIF tool execution error: {err}"
+
+                # 3) Final fallback: use latest non-empty message content.
+                elif full_response is None or str(full_response).strip() == "":
+                    try:
+                        last_msg_content = getattr(session_agent.message_history[-1], "content", None)
+                        if isinstance(last_msg_content, str) and last_msg_content.strip():
+                            full_response = last_msg_content
+                    except Exception:
+                        pass
+            else:
+                # Non-database tasks: use routed content when present.
+                if isinstance(function_args, dict):
+                    content_from_args = function_args.get('content')
+                    if isinstance(content_from_args, str) and content_from_args.strip():
+                        full_response = content_from_args
 
             if full_response is None:
                 full_response = ""
 
         full_response = str(full_response)
+
+        if active_task_name == 'nifguide_task':
+            full_response = enforce_nifguide_response_contract(
+                response_text=full_response,
+                expected_question_id=expected_nifguide_qid,
+            )
+            full_response = format_nifguide_choices_multiline(full_response)
+
+        if active_task_name == 'nif_database_task':
+            sql_from_latest_msg = None
+            if isinstance(function_args, dict):
+                sql_candidate = function_args.get("SQL_QUERY")
+                if isinstance(sql_candidate, str) and sql_candidate.strip():
+                    sql_from_latest_msg = sql_candidate.strip()
+
+            sql_from_history, tool_output_from_history = get_latest_sql_trace(session_agent)
+            sql_to_display = sql_from_latest_msg or sql_from_history or last_nif_sql_query
+
+            if isinstance(sql_to_display, str) and sql_to_display.strip():
+                if (
+                    isinstance(last_nif_query_result, dict)
+                    and str(last_nif_query_result.get("sql", "")).strip() == sql_to_display.strip()
+                ):
+                    nif_query_result_data = last_nif_query_result
+                else:
+                    nif_query_result_data = execute_nif_select_query(
+                        sql_to_display, max_rows=NIF_DB_MAX_ROWS
+                    )
+                    last_nif_query_result = nif_query_result_data
+            elif isinstance(last_nif_query_result, dict):
+                nif_query_result_data = last_nif_query_result
+
+            trace_sections = []
+            if isinstance(sql_to_display, str) and sql_to_display.strip():
+                trace_sections.append(f"SQL executed:\n```sql\n{sql_to_display}\n```")
+            else:
+                trace_sections.append("SQL executed:\n```text\n(No SQL statement was captured for this turn)\n```")
+
+            if NIF_DB_SHOW_OUTPUT_RECORDS:
+                raw_output_to_display = None
+                trace_output_heading = "Output records"
+                if isinstance(nif_query_result_data, dict):
+                    raw_output_to_display = format_nif_query_result_for_llm(
+                        nif_query_result_data,
+                        preview_rows=NIF_DB_TRACE_PREVIEW_ROWS,
+                        include_row_preview=NIF_DB_TRACE_INCLUDE_ROWS,
+                    )
+                elif isinstance(tool_output_from_history, str) and tool_output_from_history.strip():
+                    raw_output_to_display = tool_output_from_history.strip()
+                    trace_output_heading = "Raw query output"
+                elif isinstance(full_response, str) and full_response.strip():
+                    raw_output_to_display = full_response.strip()
+                    trace_output_heading = "Raw query output"
+
+                if isinstance(raw_output_to_display, str) and raw_output_to_display.strip():
+                    trace_sections.append(f"{trace_output_heading}:\n```\n{raw_output_to_display}\n```")
+
+            if trace_sections:
+                response_clean = full_response.strip()
+                if response_clean:
+                    full_response = response_clean + "\n\n---\n" + "\n\n".join(trace_sections)
+                else:
+                    full_response = "\n\n".join(trace_sections)
 
         # Remove 'DONE' from response if present (used for Langroid orchestration)
         full_response = full_response.replace('DONE.', '').replace('DONE', '')
@@ -3391,9 +5697,10 @@ def chat_bot(n_sub, human_chat_value, user_data, sid, user_nif_progress_json, ac
 
         # Save the updated history
         try:
+            trim_agent_history_for_task(session_agent, active_task_name)
             save_chat_history(session_agent.message_history, active_user_email, sid)
         except Exception as e:
-            print("Exception saving chat history: {e}")
+            print(f"Exception saving chat history: {e}")
 
         # The value to clear the textarea
         cleared_input_value = ''
@@ -3401,9 +5708,97 @@ def chat_bot(n_sub, human_chat_value, user_data, sid, user_nif_progress_json, ac
         # Write NIF progress data to dcc.Store
         if active_task_name == 'nifguide_task':
             user_nif_progress_json = user_nif_progress_df.to_json(orient='split')
-            return full_response, user_nif_progress_json, cleared_input_value
+            return full_response, user_nif_progress_json, cleared_input_value, None, None
         else:
-            return full_response, no_update, cleared_input_value
+            if active_task_name == 'nif_database_task':
+                if NIF_DB_ENHANCED_OUTPUT:
+                    return (
+                        full_response,
+                        no_update,
+                        cleared_input_value,
+                        nif_query_result_data,
+                        nif_llm_prompt_data,
+                    )
+                return full_response, no_update, cleared_input_value, None, nif_llm_prompt_data
+            return full_response, no_update, cleared_input_value, None, None
+
+
+@app.callback(
+    Output("nif-query-output-container", "style"),
+    Output("nif-query-summary", "children"),
+    Output("nif-query-table", "columns"),
+    Output("nif-query-table", "data"),
+    Input("nif_query_result_store", "data"),
+    Input("active_task_name", "data"),
+)
+def render_nif_query_table(nif_query_result, active_task_name):
+    if not NIF_DB_ENHANCED_OUTPUT:
+        return {"display": "none"}, "", [], []
+
+    if active_task_name != "nif_database_task":
+        return {"display": "none"}, "", [], []
+
+    if not nif_query_result or not isinstance(nif_query_result, dict):
+        return {"display": "none"}, "", [], []
+
+    sql = str(nif_query_result.get("sql", "") or "").strip()
+    row_count = int(nif_query_result.get("row_count", 0) or 0)
+    displayed_row_count = int(nif_query_result.get("displayed_row_count", 0) or 0)
+    truncated = bool(nif_query_result.get("truncated", False))
+    error = nif_query_result.get("error")
+
+    columns = nif_query_result.get("columns", []) or []
+    rows = nif_query_result.get("rows", []) or []
+
+    if not columns and rows:
+        columns = list(rows[0].keys())
+
+    dash_columns = [{"name": col, "id": col} for col in columns]
+
+    summary_parts = []
+    if sql:
+        summary_parts.append("SQL captured")
+    else:
+        summary_parts.append("No SQL captured")
+    summary_parts.append(f"Rows returned: {row_count}")
+    if truncated:
+        summary_parts.append(f"Showing first {displayed_row_count} rows")
+    if error:
+        summary_parts.append(f"Error: {error}")
+
+    return {"display": "block", "marginTop": "12px"}, " | ".join(summary_parts), dash_columns, rows
+
+
+@app.callback(
+    Output("show-nif-llm-prompt-button", "disabled"),
+    Input("nif_llm_prompt_store", "data"),
+    Input("active_task_name", "data"),
+)
+def toggle_nif_prompt_button(prompt_payload, active_task_name):
+    if active_task_name != "nif_database_task":
+        return True
+    return not isinstance(prompt_payload, dict)
+
+
+@app.callback(
+    Output("nif-llm-prompt-modal", "is_open"),
+    Output("nif-llm-prompt-modal-body", "children"),
+    Input("show-nif-llm-prompt-button", "n_clicks"),
+    Input("nif-llm-prompt-modal-close-button", "n_clicks"),
+    State("nif-llm-prompt-modal", "is_open"),
+    State("nif_llm_prompt_store", "data"),
+    prevent_initial_call=True,
+)
+def toggle_nif_prompt_modal(n_open, n_close, is_open, prompt_payload):
+    trigger_id = ctx.triggered_id
+
+    if trigger_id == "show-nif-llm-prompt-button":
+        return True, format_nif_llm_prompt_for_modal(prompt_payload)
+
+    if trigger_id == "nif-llm-prompt-modal-close-button":
+        return False, no_update
+
+    return is_open, no_update
 
 # clientside_callback(
 #     """connected => !connected""",
@@ -3777,6 +6172,8 @@ def toggle_clear_chat_history_warning(n1, n2, n_confirm, is_open):
     Output('human-chat-text-area', 'value', allow_duplicate=True),
     Output('file-dropdown', 'options', allow_duplicate=True),
     Output('nif_progress_data_json', 'data', allow_duplicate=True),
+    Output('nif_query_result_store', 'data', allow_duplicate=True),
+    Output('nif_llm_prompt_store', 'data', allow_duplicate=True),
 
     Input("history-confirm-button", "n_clicks"),
     State("hist-collapse", "is_open"),
@@ -3803,9 +6200,12 @@ def clear_chat_history_and_file(n_clicks, is_collapse_open, user_data, active_si
     for TASK, SESSION_ID in session_tasks.keys():
         # If it's for the active user's session, clear history
         if SESSION_ID == active_sid:
-            session_task = get_session_task(TASK, SESSION_ID)
+            session_task = get_session_task(TASK, SESSION_ID, active_user_name)
             session_agent = session_task.agent
             session_agent.clear_history(start=-len(session_agent.message_history))
+
+    # Clear RAG v2 in-memory state/history for this user as well.
+    clear_nif_rag_user_state(active_user_email)
 
     # Clear history file
     message_content = ""
@@ -3841,7 +6241,9 @@ def clear_chat_history_and_file(n_clicks, is_collapse_open, user_data, active_si
         '',                 # Clear NIFTY response box
         '',                 # Clear user input box
         [NO_USER_NIFS_MESSAGE],     # Clear file dropdown
-        user_nif_progress_json      # Write cleared NIF progress
+        user_nif_progress_json,      # Write cleared NIF progress
+        None,               # Clear NIF query table/store
+        None,               # Clear NIF prompt store
     )
 
 
