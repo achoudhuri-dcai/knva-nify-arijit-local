@@ -99,7 +99,7 @@ import langroid.utils.constants as lrc
 #### Version Number
 #!!! Add timestamp
 # 2025-11-11: For SBX, version should reflect Module 3
-version_number = '11/14/2025'
+version_number = '03/03/2026'
 
 # 2025-11-11: For TEST, version should reflect Module 4/5 with updates from KNova feedback (0.2)
 # version_number = 0.2
@@ -343,6 +343,30 @@ print(
     f" longterm_dedup={NIF_LONGTERM_HISTORY_DEDUP},"
     f" longterm_max_entries={NIF_LONGTERM_MAX_ENTRIES}"
 )
+
+APP_LLM_PROVIDER = utils.get_app_llm_provider()
+if APP_LLM_PROVIDER == "openai":
+    APP_LLM_MODEL = utils.get_openai_chat_model(task_kind="general")
+    APP_LLM_AUTH_MODE = "api_key"
+else:
+    APP_LLM_MODEL = utils.get_bedrock_chat_model(task_kind="general")
+    APP_LLM_AUTH_MODE = utils.get_bedrock_auth_mode()
+
+print(
+    "> APP_LLM config:"
+    f" provider={APP_LLM_PROVIDER},"
+    f" model={APP_LLM_MODEL},"
+    f" auth_mode={APP_LLM_AUTH_MODE},"
+    f" bedrock_region={utils.get_bedrock_region()}"
+)
+try:
+    utils.validate_llm_env_or_raise(provider=APP_LLM_PROVIDER)
+except Exception as llm_env_err:
+    print(f"> WARNING: LLM environment validation failed at startup: {llm_env_err}")
+
+APP_LLM_HEADER_TEXT = f"LLM: {APP_LLM_PROVIDER.upper()} | {APP_LLM_MODEL}"
+if APP_LLM_PROVIDER == "bedrock":
+    APP_LLM_HEADER_TEXT += f" | auth={APP_LLM_AUTH_MODE}"
 
 _docsearch_results_per_collection_raw = os.getenv(
     "DOCSEARCH_RESULTS_PER_COLLECTION", "2"
@@ -2470,100 +2494,23 @@ agent_config_gptoss = lr.ChatAgentConfig(llm=utils.aws_llm_gptoss)
 
 def get_docsearch_agent_config() -> lr.ChatAgentConfig:
     """
-    Keep docsearch on the same provider configured for vectorstore retrieval.
+    Use the app-wide provider/model selection for training resources retrieval.
     """
-    provider = utils.get_vectorstore_provider()
-    if provider == "openai":
-        openai_api_key = os.getenv("OPENAI_API_KEY", "").strip()
-        if not openai_api_key:
-            raise RuntimeError(
-                "OPENAI_API_KEY is not set. "
-                "Set OPENAI_API_KEY when VECTORSTORE_LLM_PROVIDER=openai."
-            )
-
-        openai_chat_model = os.getenv("OPENAI_CHAT_MODEL", "gpt-4o-mini").strip() or "gpt-4o-mini"
-        openai_base_url = os.getenv("OPENAI_BASE_URL", "").strip()
-        openai_config_kwargs = {
-            "chat_model": openai_chat_model,
-            "api_key": openai_api_key,
-            "temperature": 0.0,
-            "max_output_tokens": 4096,
-            "stream": False,
-        }
-        if openai_base_url:
-            openai_config_kwargs["api_base"] = openai_base_url
-
-        return lr.ChatAgentConfig(llm=lrlm.OpenAIGPTConfig(**openai_config_kwargs))
-
-    return agent_config_claude35_sonnet
+    return utils.build_chat_agent_config(task_kind="docsearch")
 
 
 def get_nifguide_agent_config() -> lr.ChatAgentConfig:
     """
-    Keep New NIF guide compatible with selected provider.
+    Use the app-wide provider/model selection for New NIF and NIF field questions.
     """
-    provider = utils.get_vectorstore_provider()
-    if provider == "openai":
-        openai_api_key = os.getenv("OPENAI_API_KEY", "").strip()
-        if not openai_api_key:
-            raise RuntimeError(
-                "OPENAI_API_KEY is not set. "
-                "Set OPENAI_API_KEY when VECTORSTORE_LLM_PROVIDER=openai."
-            )
-
-        openai_chat_model = (
-            os.getenv("OPENAI_NIFGUIDE_MODEL", "").strip()
-            or os.getenv("OPENAI_CHAT_MODEL", "").strip()
-            or "gpt-4o-mini"
-        )
-        openai_base_url = os.getenv("OPENAI_BASE_URL", "").strip()
-        openai_config_kwargs = {
-            "chat_model": openai_chat_model,
-            "api_key": openai_api_key,
-            "temperature": 0.0,
-            "max_output_tokens": 4096,
-            "stream": False,
-        }
-        if openai_base_url:
-            openai_config_kwargs["api_base"] = openai_base_url
-
-        return lr.ChatAgentConfig(llm=lrlm.OpenAIGPTConfig(**openai_config_kwargs))
-
-    return agent_config_claude35
+    return utils.build_chat_agent_config(task_kind="nifguide")
 
 
 def get_nif_database_agent_config() -> lr.ChatAgentConfig:
     """
-    Keep Search NIF compatible with the selected provider.
+    Use the app-wide provider/model selection for Search NIF.
     """
-    provider = utils.get_vectorstore_provider()
-    if provider == "openai":
-        openai_api_key = os.getenv("OPENAI_API_KEY", "").strip()
-        if not openai_api_key:
-            raise RuntimeError(
-                "OPENAI_API_KEY is not set. "
-                "Set OPENAI_API_KEY when VECTORSTORE_LLM_PROVIDER=openai."
-            )
-
-        openai_chat_model = (
-            os.getenv("OPENAI_SQL_MODEL", "").strip()
-            or os.getenv("OPENAI_CHAT_MODEL", "").strip()
-            or "gpt-4o-mini"
-        )
-        openai_base_url = os.getenv("OPENAI_BASE_URL", "").strip()
-        openai_config_kwargs = {
-            "chat_model": openai_chat_model,
-            "api_key": openai_api_key,
-            "temperature": 0.0,
-            "max_output_tokens": 4096,
-            "stream": False,
-        }
-        if openai_base_url:
-            openai_config_kwargs["api_base"] = openai_base_url
-
-        return lr.ChatAgentConfig(llm=lrlm.OpenAIGPTConfig(**openai_config_kwargs))
-
-    return agent_config_gptoss
+    return utils.build_chat_agent_config(task_kind="sql")
 
 # Name of receptionist agent. All subtasks will address responses to this.
 receptionist_name = 'ReceptionistAgent'
@@ -3575,7 +3522,7 @@ class retrieve_and_answer_tool(lr.agent.ToolMessage):
     QUERY:str   # Plain text query
 
     def handle(self):
-        vectorstore_provider = utils.get_vectorstore_provider()
+        vectorstore_provider = utils.get_app_llm_provider()
         embedding_model = utils.get_cached_retrieval_embedding_function(
             provider=vectorstore_provider
         )
@@ -3676,28 +3623,28 @@ class retrieve_and_answer_tool(lr.agent.ToolMessage):
             - Do NOT include source citations, document names, or page numbers.
             - Prefer direct wording from the page content when possible.
         '''
-        if vectorstore_provider == "openai":
-            try:
-                answer_from_images = utils.query_multiple_images_openai(
-                    retrieved_page_images, image_query_prompt, self.QUERY
-                )
-            except Exception as err:
+        try:
+            answer_from_images = utils.query_multiple_images_by_provider(
+                IMAGE_LIST=retrieved_page_images,
+                SYSTEM_PROMPT=image_query_prompt,
+                USER_QUESTION=self.QUERY,
+                provider=vectorstore_provider,
+            )
+        except Exception as err:
+            if vectorstore_provider == "openai":
                 return (
                     "I found relevant training-resource pages, but I couldn't run the OpenAI vision step.\n\n"
-                    "Check OPENAI_VISION_MODEL, OPENAI_API_KEY, and OPENAI_BASE_URL in .env.\n\n"
+                    "Check APP_LLM_PROVIDER=openai, OPENAI_API_KEY, OPENAI_BASE_URL, "
+                    "and OPENAI_VISION_MODEL/APP_LLM_MODEL in .env.\n\n"
                     f"Details: {err}\n\nSources used:\n{formatted_sources_list}"
                 )
-        else:
-            try:
-                answer_from_images = utils.query_multiple_images_bedrock(
-                    retrieved_page_images, image_query_prompt, self.QUERY
-                )
-            except Exception as err:
-                return (
-                    "I found relevant training-resource pages, but I couldn't run the Bedrock vision step.\n\n"
-                    "Check AWS credentials/region and Bedrock model access in .env.\n\n"
-                    f"Details: {err}\n\nSources used:\n{formatted_sources_list}"
-                )
+            return (
+                "I found relevant training-resource pages, but I couldn't run the Bedrock vision step.\n\n"
+                "Check APP_LLM_PROVIDER=bedrock and either IAM auth or "
+                "BEDROCK_AUTH_MODE=api_key with AWS_BEARER_TOKEN_BEDROCK. "
+                "Also verify region/model access in .env.\n\n"
+                f"Details: {err}\n\nSources used:\n{formatted_sources_list}"
+            )
 
         # Generate the final Markdown string including answer and sources
         final_output_string = answer_from_images
@@ -6307,6 +6254,7 @@ def display_user(user_data):
             [
                 html.H6("Loading user info...", className="text-white"),
                 html.P(f"Version {version_number}", className="text-light small mt-0"),
+                html.P(APP_LLM_HEADER_TEXT, className="text-light small mt-0 mb-0"),
             ],
             style={'textAlign': 'right', 'paddingRight': '15px'}
         )
@@ -6316,6 +6264,7 @@ def display_user(user_data):
         [
             html.H6(f"Welcome, {user_data.get('name', 'User')}", className="text-light mb-0"),
             html.P(f"Version {version_number}", className="text-light small mt-0"),
+            html.P(APP_LLM_HEADER_TEXT, className="text-light small mt-0 mb-0"),
         ],
         style={'textAlign': 'right', 'paddingRight': '15px'}
     )

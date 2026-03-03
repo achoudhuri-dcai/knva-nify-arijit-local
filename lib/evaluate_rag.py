@@ -247,9 +247,12 @@ def _generate_answer(
     if not image_list:
         return ""
     prompt = _build_prompt(strict_grounding=strict_grounding)
-    if provider == "openai":
-        return utils.query_multiple_images_openai(image_list, prompt, question).strip()
-    return utils.query_multiple_images_bedrock(image_list, prompt, question).strip()
+    return utils.query_multiple_images_by_provider(
+        IMAGE_LIST=image_list,
+        SYSTEM_PROMPT=prompt,
+        USER_QUESTION=question,
+        provider=provider,
+    ).strip()
 
 
 def _expected_term_recall(answer: str, expected_terms: List[str]) -> Optional[float]:
@@ -291,7 +294,7 @@ def run_eval(
     if not questions:
         raise RuntimeError(f"Dataset is empty: {dataset_path}")
 
-    resolved_provider = (provider or utils.get_vectorstore_provider()).strip().lower()
+    resolved_provider = (provider or utils.get_app_llm_provider()).strip().lower()
     if resolved_provider not in {"bedrock", "openai"}:
         raise RuntimeError(f"Unsupported provider: {resolved_provider!r}")
 
@@ -491,7 +494,7 @@ def parse_args() -> argparse.Namespace:
         "--provider",
         choices=["bedrock", "openai"],
         default=None,
-        help="Force provider (otherwise VECTORSTORE_LLM_PROVIDER is used).",
+        help="Force provider (otherwise APP_LLM_PROVIDER is used).",
     )
     parser.add_argument(
         "--run-answer-check",

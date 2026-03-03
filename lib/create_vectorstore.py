@@ -37,7 +37,7 @@ def _get_openai_client():
     if not api_key:
         raise RuntimeError(
             "OPENAI_API_KEY is not set. "
-            "Set OPENAI_API_KEY in .env when using VECTORSTORE_LLM_PROVIDER=openai."
+            "Set OPENAI_API_KEY in .env when using APP_LLM_PROVIDER=openai."
         )
     base_url = os.getenv("OPENAI_BASE_URL", "").strip()
     if base_url:
@@ -95,11 +95,80 @@ def assert_bedrock_connectivity(
     ):
     funcname = inspect.currentframe().f_code.co_name
 
-    region_name = REGION_NAME or os.getenv("AWS_REGION") or os.getenv("AWS_DEFAULT_REGION") or "us-east-1"
-    print(f"<{funcname}> Starting AWS/Bedrock preflight checks for region '{region_name}'...")
+    region_name = REGION_NAME or utils.get_bedrock_region()
+    auth_mode = utils.get_bedrock_auth_mode()
+    print(
+        f"<{funcname}> Starting Bedrock preflight checks for region '{region_name}' "
+        f"with auth_mode='{auth_mode}'..."
+    )
+
+    def _to_litellm_model(model_id: str) -> str:
+        model = str(model_id or "").strip()
+        if model.startswith("litellm/"):
+            model = model.split("litellm/", 1)[1]
+        if model.startswith("bedrock/"):
+            return model
+        return f"bedrock/{model}"
+
+    if auth_mode == "api_key":
+        token = os.getenv("AWS_BEARER_TOKEN_BEDROCK", "").strip()
+        if not token:
+            raise RuntimeError(
+                f"<{funcname}> AWS_BEARER_TOKEN_BEDROCK is not set for BEDROCK_AUTH_MODE=api_key."
+            )
+
+        os.environ.setdefault("AWS_REGION", region_name)
+        os.environ.setdefault("AWS_DEFAULT_REGION", region_name)
+
+        from litellm import completion, embedding
+
+        embed_model = os.getenv("BEDROCK_EMBED_MODEL", "amazon.titan-embed-text-v2:0").strip()
+        chat_model = utils.get_bedrock_chat_model(task_kind="docsearch")
+
+        # 1) Embedding check (Titan).
+        try:
+            emb = embedding(
+                model=_to_litellm_model(embed_model),
+                input=["bedrock preflight check"],
+                dimensions=256,
+                api_base=f"https://bedrock-runtime.{region_name}.amazonaws.com",
+            )
+            emb_data = emb.get("data", []) if isinstance(emb, dict) else getattr(emb, "data", [])
+            first_embedding = None
+            if emb_data:
+                first = emb_data[0]
+                first_embedding = first.get("embedding") if isinstance(first, dict) else getattr(first, "embedding", None)
+            if not first_embedding:
+                raise RuntimeError("Embedding response did not include vectors.")
+            print(f"<{funcname}> Bedrock API-key embeddings OK. Returned {len(first_embedding)} dimensions.")
+        except Exception as err:
+            raise RuntimeError(
+                f"<{funcname}> Bedrock API-key embedding preflight failed.\n"
+                "Check AWS_BEARER_TOKEN_BEDROCK, BEDROCK_EMBED_MODEL, model access, and outbound network.\n"
+                f"Original error: {err}"
+            ) from err
+
+        # 2) Chat/vision model check.
+        try:
+            completion(
+                model=_to_litellm_model(chat_model),
+                messages=[{"role": "user", "content": "Reply with OK"}],
+                max_tokens=8,
+                api_base=f"https://bedrock-runtime.{region_name}.amazonaws.com",
+            )
+            print(f"<{funcname}> Bedrock API-key chat model OK.")
+        except Exception as err:
+            raise RuntimeError(
+                f"<{funcname}> Bedrock API-key chat preflight failed.\n"
+                "Check APP_LLM_MODEL/BEDROCK_CHAT_MODEL access for Bedrock API-key auth.\n"
+                f"Original error: {err}"
+            ) from err
+
+        print(f"<{funcname}> All API-key preflight checks passed.")
+        return
 
     # -------------------------------------------------------------------------
-    # 1) Verify AWS credentials are present and valid.
+    # IAM auth path (instance role or AWS credentials)
     # -------------------------------------------------------------------------
     try:
         sts_client = boto3.client("sts", region_name=region_name)
@@ -111,23 +180,20 @@ def assert_bedrock_connectivity(
     except botocore.exceptions.EndpointConnectionError as err:
         raise RuntimeError(
             f"<{funcname}> Could not reach AWS STS endpoint in region '{region_name}'.\n"
-            "This is a network/DNS/VPN/proxy issue, not a Claude key format issue.\n"
+            "This is a network/DNS/VPN/proxy issue.\n"
             "Verify outbound access to sts.amazonaws.com and bedrock-runtime endpoints.\n"
             f"Original error: {err}"
         ) from err
     except Exception as err:
         raise RuntimeError(
-            f"<{funcname}> AWS credential check failed.\n"
+            f"<{funcname}> AWS IAM credential check failed.\n"
             f"Set valid AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY "
-            f"(and AWS_SESSION_TOKEN if temporary creds).\n"
+            f"(and AWS_SESSION_TOKEN if temporary creds), or use an EC2 IAM role.\n"
             f"Original error: {err}"
         ) from err
 
     bedrock_client = boto3.client("bedrock-runtime", region_name=region_name)
 
-    # -------------------------------------------------------------------------
-    # 2) Verify Bedrock Titan embedding call succeeds (used for vector embeddings).
-    # -------------------------------------------------------------------------
     try:
         titan_request = {
             "inputText": "bedrock preflight check",
@@ -154,31 +220,26 @@ def assert_bedrock_connectivity(
     except Exception as err:
         raise RuntimeError(
             f"<{funcname}> Bedrock Titan embedding preflight failed.\n"
-            "Confirm your IAM permissions include bedrock:InvokeModel for "
-            "'amazon.titan-embed-text-v2:0' and that this model is enabled in the region.\n"
+            "Confirm IAM includes bedrock:InvokeModel for 'amazon.titan-embed-text-v2:0'.\n"
             f"Original error: {err}"
         ) from err
 
-    # -------------------------------------------------------------------------
-    # 3) Verify Bedrock Claude call succeeds (used for page summarization).
-    # -------------------------------------------------------------------------
     try:
-        claude_request = {
-            "anthropic_version": "bedrock-2023-05-31",
-            "max_tokens": 8,
-            "messages": [{"role": "user", "content": [{"type": "text", "text": "Reply with OK"}]}],
-        }
-        claude_response = bedrock_client.invoke_model(
-            modelId="us.anthropic.claude-3-5-sonnet-20241022-v2:0",
-            body=json.dumps(claude_request),
-            accept="application/json",
-            contentType="application/json",
+        chat_model_id = utils.get_bedrock_chat_model(task_kind="docsearch")
+        from litellm import completion
+
+        model_for_litellm = str(chat_model_id).strip()
+        if model_for_litellm.startswith("litellm/"):
+            model_for_litellm = model_for_litellm.split("litellm/", 1)[1]
+        if not model_for_litellm.startswith("bedrock/"):
+            model_for_litellm = f"bedrock/{model_for_litellm}"
+
+        completion(
+            model=model_for_litellm,
+            messages=[{"role": "user", "content": "Reply with OK"}],
+            max_tokens=8,
         )
-        claude_body = json.loads(claude_response["body"].read())
-        content = claude_body.get("content", [])
-        if not content:
-            raise RuntimeError("Claude response did not include content.")
-        print(f"<{funcname}> Claude summarization OK.")
+        print(f"<{funcname}> Bedrock chat model OK.")
     except botocore.exceptions.EndpointConnectionError as err:
         raise RuntimeError(
             f"<{funcname}> Could not reach Bedrock endpoint in region '{region_name}'.\n"
@@ -187,19 +248,18 @@ def assert_bedrock_connectivity(
         ) from err
     except Exception as err:
         raise RuntimeError(
-            f"<{funcname}> Bedrock Claude preflight failed.\n"
-            "Confirm your IAM permissions include bedrock:InvokeModel for "
-            "'us.anthropic.claude-3-5-sonnet-20241022-v2:0' and that this model is enabled in the region.\n"
+            f"<{funcname}> Bedrock chat preflight failed.\n"
+            f"Confirm IAM includes bedrock:InvokeModel for '{utils.get_bedrock_chat_model(task_kind='docsearch')}'.\n"
             f"Original error: {err}"
         ) from err
 
-    print(f"<{funcname}> All preflight checks passed.")
+    print(f"<{funcname}> All IAM preflight checks passed.")
 
 def assert_openai_connectivity():
     funcname = inspect.currentframe().f_code.co_name
 
-    embed_model = os.getenv("OPENAI_EMBED_MODEL", "text-embedding-3-large")
-    vision_model = os.getenv("OPENAI_VISION_MODEL", "gpt-4o-mini")
+    embed_model = os.getenv("OPENAI_EMBED_MODEL", utils.DEFAULT_OPENAI_EMBED_MODEL)
+    vision_model = utils.get_openai_vision_model()
 
     print(
         f"<{funcname}> Starting OpenAI preflight checks "
@@ -444,23 +504,33 @@ def get_web_url(filename):
 '''
 These are defined in knova_utils.py.
 '''
-VECTORSTORE_LLM_PROVIDER = os.getenv("VECTORSTORE_LLM_PROVIDER", "bedrock").strip().lower()
+VECTORSTORE_LLM_PROVIDER = utils.get_app_llm_provider()
 
 if VECTORSTORE_LLM_PROVIDER not in ("bedrock", "openai"):
     raise RuntimeError(
-        "VECTORSTORE_LLM_PROVIDER must be one of: 'bedrock', 'openai'. "
+        "APP_LLM_PROVIDER/VECTORSTORE_LLM_PROVIDER must be one of: 'bedrock', 'openai'. "
         f"Got: {VECTORSTORE_LLM_PROVIDER!r}"
     )
 
 # Fail fast on auth/network/model access before starting long PDF processing.
 if VECTORSTORE_LLM_PROVIDER == "bedrock":
     assert_bedrock_connectivity()
-    summary_fn = utils.query_multiple_images_bedrock
-    embedding_model = utils.BedrockTitanEmbeddingFunction()
+    summary_fn = lambda images, system_prompt, user_question: utils.query_multiple_images_by_provider(
+        IMAGE_LIST=images,
+        SYSTEM_PROMPT=system_prompt,
+        USER_QUESTION=user_question,
+        provider="bedrock",
+    )
+    embedding_model = utils.get_cached_retrieval_embedding_function(provider="bedrock")
 else:
     assert_openai_connectivity()
-    summary_fn = query_multiple_images_openai
-    embedding_model = make_openai_embedding_function()
+    summary_fn = lambda images, system_prompt, user_question: utils.query_multiple_images_by_provider(
+        IMAGE_LIST=images,
+        SYSTEM_PROMPT=system_prompt,
+        USER_QUESTION=user_question,
+        provider="openai",
+    )
+    embedding_model = utils.get_cached_retrieval_embedding_function(provider="openai")
 
 #%% CREATE OR LOAD VECTORSTORE
 # *****************************************************************************

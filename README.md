@@ -3,6 +3,43 @@ Project NIFTY: a web application to assist Kellanova employees with the New Item
 
 NIFTY has a chatbot interface and uses LLM agents to perform tasks such as searching documentation, querying databases, and checking process rules as needed to answer user questions.
 
+## Unified LLM provider selection
+
+Use one env selection for all user modules:
+- `Get started on training resources`
+- `NIF step by step` (and `NIF field question` flow)
+- `Search NIF`
+
+Primary env variables:
+- `APP_LLM_PROVIDER=bedrock|openai`
+- `APP_LLM_MODEL=<single model used across modules>`
+
+Provider-specific auth:
+- Bedrock IAM (recommended on EC2):
+  - `APP_LLM_PROVIDER=bedrock`
+  - `BEDROCK_AUTH_MODE=iam` (or `auto`)
+  - `BEDROCK_REGION=us-east-1` (or use `AWS_REGION` / `AWS_DEFAULT_REGION`)
+- Bedrock API key:
+  - `APP_LLM_PROVIDER=bedrock`
+  - `BEDROCK_AUTH_MODE=api_key`
+  - `AWS_BEARER_TOKEN_BEDROCK=<bedrock_api_key_value>`
+  - `BEDROCK_REGION=us-east-1`
+- OpenAI API key:
+  - `APP_LLM_PROVIDER=openai`
+  - `OPENAI_API_KEY=<key>`
+  - optional `OPENAI_BASE_URL=<gateway_or_proxy>`
+
+Model overrides (optional):
+- Bedrock: `BEDROCK_CHAT_MODEL`, `BEDROCK_DOCSEARCH_MODEL`, `BEDROCK_NIFGUIDE_MODEL`, `BEDROCK_SQL_MODEL`, `BEDROCK_VISION_MODEL`
+- OpenAI: `OPENAI_CHAT_MODEL`, `OPENAI_DOCSEARCH_MODEL`, `OPENAI_NIFGUIDE_MODEL`, `OPENAI_SQL_MODEL`, `OPENAI_VISION_MODEL`
+
+Embedding config:
+- OpenAI: `OPENAI_EMBED_MODEL`, `OPENAI_EMBED_DIMENSIONS`
+- Bedrock: `BEDROCK_EMBED_MODEL`, `BEDROCK_EMBED_DIMENSIONS`, `BEDROCK_EMBED_NORMALIZE`
+
+Backward compatibility:
+- If `APP_LLM_PROVIDER` is not set, the app falls back to `VECTORSTORE_LLM_PROVIDER`.
+
 ## New NIF RAG v2 engine
 
 A high-performance rule+RAG engine is available for **New NIF chat session** and is linked to the existing UI button.

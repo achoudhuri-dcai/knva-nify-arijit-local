@@ -50,6 +50,209 @@ _VECTORSTORE_CLIENT_CACHE: Dict[str, chromadb.PersistentClient] = {}
 _VECTORSTORE_COLLECTIONS_CACHE: Dict[str, List[str]] = {}
 _EMBEDDING_FN_CACHE: Dict[str, Any] = {}
 
+# Shared provider/auth configuration
+SUPPORTED_LLM_PROVIDERS = {"bedrock", "openai"}
+SUPPORTED_BEDROCK_AUTH_MODES = {"auto", "iam", "api_key"}
+
+DEFAULT_BEDROCK_REGION = "us-east-1"
+DEFAULT_BEDROCK_CHAT_MODEL = "us.anthropic.claude-3-5-sonnet-20241022-v2:0"
+DEFAULT_BEDROCK_NIFGUIDE_MODEL = "us.anthropic.claude-3-5-haiku-20241022-v1:0"
+DEFAULT_BEDROCK_SQL_MODEL = "openai.gpt-oss-120b-1:0"
+DEFAULT_BEDROCK_DOCSEARCH_MODEL = "us.anthropic.claude-3-5-sonnet-20241022-v2:0"
+DEFAULT_BEDROCK_EMBED_MODEL = "amazon.titan-embed-text-v2:0"
+
+DEFAULT_OPENAI_CHAT_MODEL = "gpt-4o-mini"
+DEFAULT_OPENAI_EMBED_MODEL = "text-embedding-3-large"
+
+
+def _env(name: str, default: str = "") -> str:
+    return str(os.getenv(name, default) or "").strip()
+
+
+def _truthy(value: str) -> bool:
+    return str(value or "").strip().lower() in {"1", "true", "t", "yes", "y", "on"}
+
+
+def _safe_int(value: str, default: int) -> int:
+    try:
+        return int(str(value).strip())
+    except Exception:
+        return default
+
+
+def get_app_llm_provider() -> str:
+    provider = (_env("APP_LLM_PROVIDER") or _env("VECTORSTORE_LLM_PROVIDER") or "bedrock").lower()
+    if provider not in SUPPORTED_LLM_PROVIDERS:
+        print(
+            f"<get_app_llm_provider> Invalid provider={provider!r}. "
+            "Using 'bedrock'."
+        )
+        return "bedrock"
+    return provider
+
+
+def get_vectorstore_provider() -> str:
+    """
+    Backward-compatible alias for retrieval and agent provider selection.
+    """
+    return get_app_llm_provider()
+
+
+def get_bedrock_region() -> str:
+    return (
+        _env("BEDROCK_REGION")
+        or _env("AWS_REGION")
+        or _env("AWS_DEFAULT_REGION")
+        or DEFAULT_BEDROCK_REGION
+    )
+
+
+def get_bedrock_auth_mode() -> str:
+    raw_mode = _env("BEDROCK_AUTH_MODE", "auto").lower() or "auto"
+    if raw_mode not in SUPPORTED_BEDROCK_AUTH_MODES:
+        print(
+            f"<get_bedrock_auth_mode> Invalid BEDROCK_AUTH_MODE={raw_mode!r}. "
+            "Using 'auto'."
+        )
+        raw_mode = "auto"
+    if raw_mode == "auto":
+        return "api_key" if _env("AWS_BEARER_TOKEN_BEDROCK") else "iam"
+    return raw_mode
+
+
+def _normalize_task_kind(task_kind: str) -> str:
+    normalized = str(task_kind or "general").strip().lower()
+    if normalized in {"search_nif", "search", "sql", "database"}:
+        return "sql"
+    if normalized in {"nif_step_by_step", "nifguide", "guide", "nif_field"}:
+        return "nifguide"
+    if normalized in {"training", "docsearch", "retrieval"}:
+        return "docsearch"
+    return "general"
+
+
+def get_openai_chat_model(task_kind: str = "general") -> str:
+    task = _normalize_task_kind(task_kind)
+    app_model = _env("APP_LLM_MODEL")
+    if app_model:
+        return app_model
+
+    if task == "sql":
+        return _env("OPENAI_SQL_MODEL") or _env("OPENAI_CHAT_MODEL") or DEFAULT_OPENAI_CHAT_MODEL
+    if task == "nifguide":
+        return _env("OPENAI_NIFGUIDE_MODEL") or _env("OPENAI_CHAT_MODEL") or DEFAULT_OPENAI_CHAT_MODEL
+    if task == "docsearch":
+        return _env("OPENAI_DOCSEARCH_MODEL") or _env("OPENAI_CHAT_MODEL") or DEFAULT_OPENAI_CHAT_MODEL
+    return _env("OPENAI_CHAT_MODEL") or DEFAULT_OPENAI_CHAT_MODEL
+
+
+def get_openai_vision_model() -> str:
+    return _env("APP_LLM_MODEL") or _env("OPENAI_VISION_MODEL") or _env("OPENAI_CHAT_MODEL") or DEFAULT_OPENAI_CHAT_MODEL
+
+
+def get_bedrock_chat_model(task_kind: str = "general") -> str:
+    task = _normalize_task_kind(task_kind)
+    app_model = _env("APP_LLM_MODEL")
+    if app_model:
+        return app_model
+
+    if task == "sql":
+        return _env("BEDROCK_SQL_MODEL") or _env("BEDROCK_CHAT_MODEL") or DEFAULT_BEDROCK_SQL_MODEL
+    if task == "nifguide":
+        return _env("BEDROCK_NIFGUIDE_MODEL") or _env("BEDROCK_CHAT_MODEL") or DEFAULT_BEDROCK_NIFGUIDE_MODEL
+    if task == "docsearch":
+        return _env("BEDROCK_DOCSEARCH_MODEL") or _env("BEDROCK_CHAT_MODEL") or DEFAULT_BEDROCK_DOCSEARCH_MODEL
+    return _env("BEDROCK_CHAT_MODEL") or DEFAULT_BEDROCK_CHAT_MODEL
+
+
+def get_bedrock_vision_model() -> str:
+    return _env("APP_LLM_MODEL") or _env("BEDROCK_VISION_MODEL") or _env("BEDROCK_DOCSEARCH_MODEL") or DEFAULT_BEDROCK_DOCSEARCH_MODEL
+
+
+def _to_langroid_bedrock_chat_model(model_id: str) -> str:
+    model = str(model_id or "").strip()
+    if not model:
+        model = DEFAULT_BEDROCK_CHAT_MODEL
+    if model.startswith("litellm/bedrock/"):
+        return model
+    if model.startswith("bedrock/"):
+        return f"litellm/{model}"
+    if model.startswith("litellm/"):
+        return model
+    return f"litellm/bedrock/{model}"
+
+
+def _to_litellm_bedrock_model(model_id: str) -> str:
+    model = str(model_id or "").strip()
+    if not model:
+        model = DEFAULT_BEDROCK_CHAT_MODEL
+    if model.startswith("litellm/"):
+        model = model.split("litellm/", 1)[1]
+    if model.startswith("bedrock/"):
+        return model
+    return f"bedrock/{model}"
+
+
+def validate_llm_env_or_raise(provider: Optional[str] = None) -> None:
+    provider_name = (provider or get_app_llm_provider()).strip().lower()
+    if provider_name not in SUPPORTED_LLM_PROVIDERS:
+        raise RuntimeError(f"Unsupported APP_LLM_PROVIDER={provider_name!r}.")
+
+    if provider_name == "openai":
+        if not _env("OPENAI_API_KEY"):
+            raise RuntimeError(
+                "OPENAI_API_KEY is not set. "
+                "Set OPENAI_API_KEY when APP_LLM_PROVIDER=openai."
+            )
+        return
+
+    bedrock_auth_mode = get_bedrock_auth_mode()
+    if bedrock_auth_mode == "api_key" and not _env("AWS_BEARER_TOKEN_BEDROCK"):
+        raise RuntimeError(
+            "AWS_BEARER_TOKEN_BEDROCK is not set. "
+            "Set it when APP_LLM_PROVIDER=bedrock and BEDROCK_AUTH_MODE=api_key."
+        )
+
+
+def build_chat_agent_config(task_kind: str = "general"):
+    import langroid as lr
+
+    provider_name = get_app_llm_provider()
+    validate_llm_env_or_raise(provider_name)
+
+    try:
+        temperature = float(_env("APP_LLM_TEMPERATURE", "0") or "0")
+    except Exception:
+        temperature = 0.0
+    max_output_tokens = _safe_int(_env("APP_LLM_MAX_OUTPUT_TOKENS", "4096"), 4096)
+
+    if provider_name == "openai":
+        openai_kwargs = {
+            "chat_model": get_openai_chat_model(task_kind=task_kind),
+            "api_key": _env("OPENAI_API_KEY"),
+            "temperature": temperature,
+            "max_output_tokens": max_output_tokens,
+            "stream": False,
+        }
+        openai_base_url = _env("OPENAI_BASE_URL")
+        if openai_base_url:
+            openai_kwargs["api_base"] = openai_base_url
+        return lr.ChatAgentConfig(llm=lrlm.OpenAIGPTConfig(**openai_kwargs))
+
+    bedrock_region = get_bedrock_region()
+    bedrock_kwargs = {
+        "chat_model": _to_langroid_bedrock_chat_model(
+            get_bedrock_chat_model(task_kind=task_kind)
+        ),
+        "chat_context_length": 1e6,
+        "max_output_tokens": max_output_tokens,
+        "temperature": temperature,
+        "stream": False,
+    }
+    if get_bedrock_auth_mode() == "api_key":
+        bedrock_kwargs["api_base"] = f"https://bedrock-runtime.{bedrock_region}.amazonaws.com"
+    return lr.ChatAgentConfig(llm=lrlm.OpenAIGPTConfig(**bedrock_kwargs))
+
 #%% CONFIGURE LLMS
 # *****************************************************************************
 # # Embedding model
@@ -233,6 +436,81 @@ class BedrockTitanEmbeddingFunction(chromadb.EmbeddingFunction):
                 raise e
 
         return embeddings
+
+
+class BedrockTitanEmbeddingFunctionApiKey(chromadb.EmbeddingFunction):
+    """
+    Embedding function that uses Bedrock API-key auth (AWS_BEARER_TOKEN_BEDROCK)
+    through LiteLLM for Titan embeddings.
+    """
+
+    def __init__(
+        self,
+        region_name: str = DEFAULT_BEDROCK_REGION,
+        model_id: str = DEFAULT_BEDROCK_EMBED_MODEL,
+        dimensions: int = 1024,
+        normalize: bool = True,
+    ):
+        self.region_name = str(region_name or DEFAULT_BEDROCK_REGION).strip()
+        self.model_id = str(model_id or DEFAULT_BEDROCK_EMBED_MODEL).strip()
+        self.dimensions = int(dimensions)
+        self.normalize = bool(normalize)
+        self.api_key = _env("AWS_BEARER_TOKEN_BEDROCK")
+        if not self.api_key:
+            raise RuntimeError(
+                "AWS_BEARER_TOKEN_BEDROCK is not set. "
+                "Set it when using BEDROCK_AUTH_MODE=api_key."
+            )
+
+    def __call__(self, input: chromadb.Documents) -> chromadb.Embeddings:
+        from litellm import embedding
+
+        texts = list(input or [])
+        if len(texts) == 0:
+            return []
+
+        # LiteLLM relies on these env vars for Bedrock API-key auth.
+        if not _env("AWS_REGION"):
+            os.environ["AWS_REGION"] = self.region_name
+        if not _env("AWS_DEFAULT_REGION"):
+            os.environ["AWS_DEFAULT_REGION"] = self.region_name
+
+        model_name = _to_litellm_bedrock_model(self.model_id)
+
+        try:
+            response = embedding(
+                model=model_name,
+                input=texts,
+                dimensions=self.dimensions,
+            )
+        except TypeError:
+            # Some model routes may ignore dimensions in the SDK.
+            response = embedding(
+                model=model_name,
+                input=texts,
+            )
+
+        if isinstance(response, dict):
+            data = response.get("data", [])
+        else:
+            data = getattr(response, "data", [])
+
+        embeddings: List[List[float]] = []
+        for item in data:
+            if isinstance(item, dict):
+                emb = item.get("embedding")
+            else:
+                emb = getattr(item, "embedding", None)
+            if emb is None:
+                raise RuntimeError("Bedrock API-key embedding response missing 'embedding'.")
+            embeddings.append(emb)
+
+        if len(embeddings) != len(texts):
+            raise RuntimeError(
+                "Bedrock API-key embedding response size mismatch. "
+                f"Expected {len(texts)}, got {len(embeddings)}."
+            )
+        return embeddings
     
 #%% FUNCTIONS
 # *****************************************************************************
@@ -259,25 +537,15 @@ def encode_image(IMAGE_FILE:str):   # Provide full path to image file. PNG or JP
 def looks_like_base64(STRING):
     return re.match("^[A-Za-z0-9+/]+[=]{0,2}$", STRING) is not None
 
-def get_vectorstore_provider() -> str:
-    provider = os.getenv("VECTORSTORE_LLM_PROVIDER", "bedrock").strip().lower()
-    if provider not in {"bedrock", "openai"}:
-        print(
-            f"<get_vectorstore_provider> Invalid VECTORSTORE_LLM_PROVIDER={provider!r}. "
-            "Using 'bedrock'."
-        )
-        return "bedrock"
-    return provider
-
 def get_openai_embedding_function():
     api_key = os.getenv("OPENAI_API_KEY", "").strip()
     if not api_key:
         raise RuntimeError(
             "OPENAI_API_KEY is not set. "
-            "Set OPENAI_API_KEY when VECTORSTORE_LLM_PROVIDER=openai."
+            "Set OPENAI_API_KEY when APP_LLM_PROVIDER=openai."
         )
 
-    embed_model = os.getenv("OPENAI_EMBED_MODEL", "text-embedding-3-large").strip()
+    embed_model = os.getenv("OPENAI_EMBED_MODEL", DEFAULT_OPENAI_EMBED_MODEL).strip()
     embed_dims_raw = os.getenv("OPENAI_EMBED_DIMENSIONS", "").strip()
     embed_dims = int(embed_dims_raw) if embed_dims_raw else None
     base_url = os.getenv("OPENAI_BASE_URL", "").strip()
@@ -321,14 +589,14 @@ def get_cached_collection_names(FOLDER_PATH: str, refresh: bool = False) -> List
 
 def get_cached_retrieval_embedding_function(provider: Optional[str] = None):
     """
-    Return a cached embedding function aligned to VECTORSTORE_LLM_PROVIDER.
+    Return a cached embedding function aligned to APP_LLM_PROVIDER.
     """
-    provider_name = (provider or get_vectorstore_provider()).strip().lower()
+    provider_name = (provider or get_app_llm_provider()).strip().lower()
     if provider_name == "openai":
         signature = "|".join(
             [
                 "openai",
-                os.getenv("OPENAI_EMBED_MODEL", "text-embedding-3-large").strip(),
+                os.getenv("OPENAI_EMBED_MODEL", DEFAULT_OPENAI_EMBED_MODEL).strip(),
                 os.getenv("OPENAI_EMBED_DIMENSIONS", "").strip(),
                 os.getenv("OPENAI_BASE_URL", "").strip(),
             ]
@@ -337,10 +605,31 @@ def get_cached_retrieval_embedding_function(provider: Optional[str] = None):
             _EMBEDDING_FN_CACHE[signature] = get_openai_embedding_function()
         return _EMBEDDING_FN_CACHE[signature]
 
-    region_name = (os.getenv("AWS_REGION") or os.getenv("AWS_DEFAULT_REGION") or "us-east-1").strip()
-    signature = f"bedrock|{region_name}|amazon.titan-embed-text-v2:0|1024|true"
+    bedrock_region = get_bedrock_region()
+    bedrock_auth_mode = get_bedrock_auth_mode()
+    bedrock_embed_model = os.getenv("BEDROCK_EMBED_MODEL", DEFAULT_BEDROCK_EMBED_MODEL).strip()
+    bedrock_embed_dims = _safe_int(os.getenv("BEDROCK_EMBED_DIMENSIONS", "1024"), 1024)
+    bedrock_embed_dims = 1024 if bedrock_embed_dims <= 0 else bedrock_embed_dims
+    bedrock_embed_normalize = _truthy(os.getenv("BEDROCK_EMBED_NORMALIZE", "true"))
+    signature = (
+        f"bedrock|{bedrock_auth_mode}|{bedrock_region}|{bedrock_embed_model}|"
+        f"{bedrock_embed_dims}|{str(bedrock_embed_normalize).lower()}"
+    )
     if signature not in _EMBEDDING_FN_CACHE:
-        _EMBEDDING_FN_CACHE[signature] = BedrockTitanEmbeddingFunction(region_name=region_name)
+        if bedrock_auth_mode == "api_key":
+            _EMBEDDING_FN_CACHE[signature] = BedrockTitanEmbeddingFunctionApiKey(
+                region_name=bedrock_region,
+                model_id=bedrock_embed_model,
+                dimensions=bedrock_embed_dims,
+                normalize=bedrock_embed_normalize,
+            )
+        else:
+            _EMBEDDING_FN_CACHE[signature] = BedrockTitanEmbeddingFunction(
+                region_name=bedrock_region,
+                model_id=bedrock_embed_model,
+                dimensions=bedrock_embed_dims,
+                normalize=bedrock_embed_normalize,
+            )
     return _EMBEDDING_FN_CACHE[signature]
 
 # To run a query on a SQLite database
@@ -731,29 +1020,47 @@ def query_multiple_images_bedrock(
         IMAGE_LIST: list[str]       # List of image strings. May be either full paths to image files or base64-encoded images.
         ,SYSTEM_PROMPT: str         # System prompt
         ,USER_QUESTION: str         # User question
-        ,MODEL_ID: str = "us.anthropic.claude-3-5-sonnet-20241022-v2:0"  # AWS Bedrock model ID for Claude 3.5 Sonnet
-        ,REGION_NAME: str = "us-east-1"     # AWS region
+        ,MODEL_ID: str = None       # AWS Bedrock model ID
+        ,REGION_NAME: str = None    # AWS region
     ):
-    import boto3
-    import base64
-    import json
-    
-    # Create Bedrock client
-    # This requires AWS credentials to be configured (via environment variables, .env file, or IAM role).
-    # Recommended: Set AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, and AWS_DEFAULT_REGION environment variables.
-    bedrock_client = boto3.client('bedrock-runtime', region_name=REGION_NAME)
-    
-    # Prepare images
+    model_id = str(MODEL_ID or get_bedrock_vision_model()).strip()
+    region_name = str(REGION_NAME or get_bedrock_region()).strip()
+    auth_mode = get_bedrock_auth_mode()
+
+    if auth_mode == "api_key":
+        return _query_multiple_images_bedrock_litellm(
+            IMAGE_LIST=IMAGE_LIST,
+            SYSTEM_PROMPT=SYSTEM_PROMPT,
+            USER_QUESTION=USER_QUESTION,
+            MODEL_ID=model_id,
+            REGION_NAME=region_name,
+            use_api_base=True,
+        )
+
+    # IAM mode: try model-agnostic LiteLLM route first.
+    try:
+        return _query_multiple_images_bedrock_litellm(
+            IMAGE_LIST=IMAGE_LIST,
+            SYSTEM_PROMPT=SYSTEM_PROMPT,
+            USER_QUESTION=USER_QUESTION,
+            MODEL_ID=model_id,
+            REGION_NAME=region_name,
+            use_api_base=False,
+        )
+    except Exception:
+        # Fallback to native Anthropic payload for legacy compatibility.
+        if "anthropic" not in model_id.lower():
+            raise
+
+    bedrock_client = boto3.client('bedrock-runtime', region_name=region_name)
+
     image_content = []  # Initialize
     for image in IMAGE_LIST:
         if looks_like_base64(image):
             image_b64 = image
         else:
-            # Encode image as base64
             image_b64 = encode_image(image)
-        
-        # Append to list formatted for Bedrock (Claude)
-        # Bedrock expects images in source.bytes format
+
         image_content.append({
             "type": "image",
             "source": {
@@ -762,17 +1069,12 @@ def query_multiple_images_bedrock(
                 "data": image_b64
             }
         })
-    
-    # Build messages for Bedrock API
+
     user_content = [{"type": "text", "text": USER_QUESTION}] + image_content
-    
-    messages = [
-        {"role": "user", "content": user_content}
-    ]
-    
-    # Call Bedrock API
+    messages = [{"role": "user", "content": user_content}]
+
     response = bedrock_client.invoke_model(
-        modelId=MODEL_ID,
+        modelId=model_id,
         contentType="application/json",
         accept="application/json",
         body=json.dumps({
@@ -782,11 +1084,79 @@ def query_multiple_images_bedrock(
             "messages": messages
         })
     )
-    
-    # Parse response
     response_body = json.loads(response['body'].read())
-    
     return response_body['content'][0]['text']
+
+
+def _extract_litellm_text_content(message_content: Any) -> str:
+    if isinstance(message_content, str):
+        return message_content.strip()
+    if isinstance(message_content, list):
+        parts: List[str] = []
+        for block in message_content:
+            if isinstance(block, dict):
+                text = str(block.get("text", "") or "").strip()
+                if text:
+                    parts.append(text)
+        return "\n".join(parts).strip()
+    return str(message_content or "").strip()
+
+
+def _query_multiple_images_bedrock_litellm(
+        IMAGE_LIST: list[str],
+        SYSTEM_PROMPT: str,
+        USER_QUESTION: str,
+        MODEL_ID: str,
+        REGION_NAME: str,
+        use_api_base: bool,
+    ) -> str:
+    from litellm import completion
+
+    if use_api_base and not _env("AWS_BEARER_TOKEN_BEDROCK"):
+        raise RuntimeError(
+            "AWS_BEARER_TOKEN_BEDROCK is not set. "
+            "Set it when APP_LLM_PROVIDER=bedrock and BEDROCK_AUTH_MODE=api_key."
+        )
+
+    image_content = []
+    for image in IMAGE_LIST:
+        image_b64 = image if looks_like_base64(image) else encode_image(image)
+        image_content.append(
+            {
+                "type": "image_url",
+                "image_url": {"url": f"data:image/jpeg;base64,{image_b64}"},
+            }
+        )
+
+    messages = [
+        {"role": "system", "content": SYSTEM_PROMPT},
+        {"role": "user", "content": [{"type": "text", "text": USER_QUESTION}] + image_content},
+    ]
+
+    completion_kwargs: Dict[str, Any] = {
+        "model": _to_litellm_bedrock_model(MODEL_ID),
+        "messages": messages,
+        "max_tokens": 1024,
+    }
+    if use_api_base:
+        completion_kwargs["api_base"] = f"https://bedrock-runtime.{REGION_NAME}.amazonaws.com"
+    response = completion(**completion_kwargs)
+
+    if isinstance(response, dict):
+        choices = response.get("choices", [])
+        first_choice = choices[0] if choices else {}
+        message = first_choice.get("message", {}) if isinstance(first_choice, dict) else {}
+        content = message.get("content") if isinstance(message, dict) else ""
+    else:
+        choices = getattr(response, "choices", [])
+        first_choice = choices[0] if choices else None
+        message = getattr(first_choice, "message", None) if first_choice is not None else None
+        content = getattr(message, "content", "") if message is not None else ""
+
+    output_text = _extract_litellm_text_content(content)
+    if not output_text:
+        raise RuntimeError("Bedrock API-key vision response returned empty content.")
+    return output_text
 
 def query_multiple_images_openai(
         IMAGE_LIST: list[str]       # List of image strings. May be either full paths to image files or base64-encoded images.
@@ -800,10 +1170,10 @@ def query_multiple_images_openai(
     if not api_key:
         raise RuntimeError(
             "OPENAI_API_KEY is not set. "
-            "Set OPENAI_API_KEY when VECTORSTORE_LLM_PROVIDER=openai."
+            "Set OPENAI_API_KEY when APP_LLM_PROVIDER=openai."
         )
 
-    vision_model = MODEL_ID or os.getenv("OPENAI_VISION_MODEL", "gpt-4o-mini")
+    vision_model = MODEL_ID or get_openai_vision_model()
     base_url = os.getenv("OPENAI_BASE_URL", "").strip()
     if base_url:
         client = OpenAI(api_key=api_key, base_url=base_url)
@@ -833,6 +1203,30 @@ def query_multiple_images_openai(
         max_tokens=1024,
     )
     return (response.choices[0].message.content or "").strip()
+
+
+def query_multiple_images_by_provider(
+        IMAGE_LIST: list[str],
+        SYSTEM_PROMPT: str,
+        USER_QUESTION: str,
+        provider: Optional[str] = None,
+        model_id: Optional[str] = None,
+    ) -> str:
+    resolved_provider = (provider or get_app_llm_provider()).strip().lower()
+    if resolved_provider == "openai":
+        return query_multiple_images_openai(
+            IMAGE_LIST=IMAGE_LIST,
+            SYSTEM_PROMPT=SYSTEM_PROMPT,
+            USER_QUESTION=USER_QUESTION,
+            MODEL_ID=model_id or get_openai_vision_model(),
+        )
+    return query_multiple_images_bedrock(
+        IMAGE_LIST=IMAGE_LIST,
+        SYSTEM_PROMPT=SYSTEM_PROMPT,
+        USER_QUESTION=USER_QUESTION,
+        MODEL_ID=model_id or get_bedrock_vision_model(),
+        REGION_NAME=get_bedrock_region(),
+    )
 
 #%% TESTS
 # *****************************************************************************
