@@ -699,6 +699,20 @@ api_base and api_key can be retrieved from the "Models + endpoints" page two way
 
 API version must be updated periodically. Check https://learn.microsoft.com/en-us/azure/ai-services/openai/api-version-deprecation.
 '''
+def _safe_init_azure_gpt(config, model_label: str):
+    """
+    Avoid hard-failing module import when Azure env vars are not configured.
+    This library is imported by non-Azure code paths as well.
+    """
+    try:
+        return lrlm.AzureGPT(config)
+    except Exception as err:
+        print(
+            f"> WARNING: Azure model '{model_label}' was not initialized. "
+            f"Reason: {err}"
+        )
+        return None
+
 # GPT-4o
 azure_gpt4o_config = lrlm.AzureConfig(
     # Required
@@ -709,7 +723,7 @@ azure_gpt4o_config = lrlm.AzureConfig(
     ,temperature=0
     ,max_output_tokens=4096    # To get around Agent error complaining about max tokens
 )
-azure_gpt4o = lrlm.AzureGPT(azure_gpt4o_config)
+azure_gpt4o = _safe_init_azure_gpt(azure_gpt4o_config, "GPT-4o")
 # azure_gpt4o.chat('Hello!', max_tokens=None)
 
 # GPT-4o-mini
@@ -722,7 +736,7 @@ azure_gpt4o_mini_config = lrlm.AzureConfig(
     ,temperature=0
     ,max_output_tokens=4096    # To get around Agent error complaining about max tokens
 )
-azure_gpt4o_mini = lrlm.AzureGPT(azure_gpt4o_mini_config)
+azure_gpt4o_mini = _safe_init_azure_gpt(azure_gpt4o_mini_config, "gpt-4o-mini")
 # azure_gpt4o_mini.chat('Hello!', max_tokens=None)
 
 # GPT-3.5-turbo
@@ -735,7 +749,7 @@ azure_gpt35_config = lrlm.AzureConfig(
     ,temperature=0
     ,max_output_tokens=4096    # To get around Agent error complaining about max tokens
 )
-azure_gpt35 = lrlm.AzureGPT(azure_gpt35_config)
+azure_gpt35 = _safe_init_azure_gpt(azure_gpt35_config, "GPT-35-turbo-01")
 # azure_gpt35.chat('Hello!', max_tokens=None)
 
 # Text Embedding
@@ -744,7 +758,7 @@ azure_embed_config = lrlm.AzureConfig(
     deployment_name='text-embedding-ada-002'
     ,model_name='text-embedding-ada-002'
 )
-azure_embed = lrlm.AzureGPT(azure_embed_config)
+azure_embed = _safe_init_azure_gpt(azure_embed_config, "text-embedding-ada-002")
 
 # Text Embedding Large
 azure_embed_large_config = lrlm.AzureConfig(
@@ -752,7 +766,7 @@ azure_embed_large_config = lrlm.AzureConfig(
     deployment_name='text-embedding-3-large'
     ,model_name='text-embedding-3-large'
 )
-azure_embed_large = lrlm.AzureGPT(azure_embed_large_config)
+azure_embed_large = _safe_init_azure_gpt(azure_embed_large_config, "text-embedding-3-large")
 
 # =============================================================================
 #### LLM Utility Functions

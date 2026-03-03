@@ -16,6 +16,7 @@ __*
 /output
 /history
 /logs
+/.venv
 /.chainlit
 /python_env
 .env
