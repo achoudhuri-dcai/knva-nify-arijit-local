@@ -1,7 +1,6 @@
 __*
 /Dash_App/raw_docs
 /Dash_App/doc_images_and_summaries
-/Dash_App/database
 /Dash_App/vectorstore
 /Dash_App/logs
 /Dash_App/history
@@ -12,7 +11,6 @@ __*
 /assets/doc_images_and_summaries
 /assets/raw_docs
 /admin_feedback
-/database
 /vectorstore
 /user_in_progress_nifs
 /user_files
