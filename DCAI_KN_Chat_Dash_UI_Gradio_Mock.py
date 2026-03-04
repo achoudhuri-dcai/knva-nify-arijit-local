@@ -32,6 +32,7 @@ import re
 import uuid
 import threading
 from typing import List, Tuple, Optional
+from io import StringIO
 from dotenv import find_dotenv, load_dotenv, dotenv_values
 dotenv_loaded = load_dotenv()
 dotenv_dict = dotenv_values()
@@ -428,6 +429,11 @@ print(
     f" max_distance={DOCSEARCH_MAX_DISTANCE},"
     f" strict_grounding={DOCSEARCH_STRICT_GROUNDING}"
 )
+
+REACT_NIF_STEP_ENHANCED = os.getenv(
+    "REACT_NIF_STEP_ENHANCED", "true"
+).strip().lower() in {"1", "true", "t", "yes", "y", "on"}
+print(f"> REACT_NIF_STEP_ENHANCED={REACT_NIF_STEP_ENHANCED}")
 
 app_title = "Kellanova Project NIFTY"
 external_stylesheets=[dbc.themes.BOOTSTRAP,
@@ -4500,25 +4506,7 @@ def reload_nif_config_from_ui(n_clicks, active_task_name):
         raise dash.exceptions.PreventUpdate
 
     try:
-        summary = reload_nif_runtime_configuration()
-        message = (
-            "NIF rules reloaded successfully. "
-            f"Rules: {summary.get('rules_count', 0)}, "
-            f"Glossary terms: {summary.get('glossary_count', 0)}, "
-            f"Dropdown lists: {summary.get('dropdown_lists', 0)}, "
-            f"Legacy sessions refreshed: {summary.get('legacy_tasks_refreshed', 0)}."
-        )
-
-        rag_error = summary.get("rag_build_error")
-        if rag_error:
-            message += f" RAG rebuild warning: {rag_error}"
-        else:
-            message += " RAG artifacts refreshed."
-
-        if active_task_name == 'nifguide_task':
-            message += " Continue chatting to use the updated rules immediately."
-
-        return message
+        return build_reload_nif_message(active_task_name)
     except Exception as err:
         return (
             "Failed to reload NIF rules at runtime. "
@@ -4929,6 +4917,283 @@ def build_nif_resume_submit_text(
     )
 
 
+def _resolve_active_user_identity(user_data):
+    """
+    Normalize user identity from SSO payload or local fallback.
+    """
+    if not user_data:
+        return "User_no_sso", "User_no_sso@email.com"
+    return (
+        user_data.get("name", "User"),
+        user_data.get("email", "user@email.com"),
+    )
+
+
+def _sanitize_nif_filename(filename, default_name="My In-progress NIF"):
+    cleaned = re.sub(r"[^A-Za-z0-9 ._-]+", "", str(filename or "")).strip()
+    return cleaned or default_name
+
+
+def _read_nif_progress_df_from_json(user_nif_progress_json):
+    raw_json = user_nif_progress_json
+    if raw_json is None:
+        raise ValueError("No progress data found.")
+    if not isinstance(raw_json, str):
+        raw_json = str(raw_json)
+    if not raw_json.strip():
+        raise ValueError("No progress data found.")
+    return pd.read_json(StringIO(raw_json), orient="split")
+
+
+def build_nif_progress_preview_text(user_nif_progress_json):
+    try:
+        user_nif_progress_df = _read_nif_progress_df_from_json(user_nif_progress_json)
+        user_nif_progress_df_display = user_nif_progress_df.drop(
+            columns=['_agentref_last_question_answered', '_agentref_last_answer_given'],
+            errors="ignore",
+        )
+        dictionary_todisplay = user_nif_progress_df_display.to_dict(orient='list')
+        output_string = ""
+        for field_name, value in dictionary_todisplay.items():
+            output_string = output_string + f"{field_name}: {value}\n"
+        return {
+            "ok": True,
+            "code": "ok",
+            "message": "",
+            "progress_text": output_string or "No progress data found.",
+        }
+    except Exception:
+        return {
+            "ok": False,
+            "code": "no_progress_data",
+            "message": "No progress data found.",
+            "progress_text": "No progress data found.",
+        }
+
+
+def build_nif_progress_download_frame(user_nif_progress_json):
+    user_nif_progress_df = _read_nif_progress_df_from_json(user_nif_progress_json)
+    user_nif_progress_df_fordl = user_nif_progress_df.drop(
+        columns=['_agentref_last_question_answered', '_agentref_last_answer_given'],
+        errors="ignore",
+    )
+    return user_nif_progress_df_fordl.transpose()
+
+
+def build_reload_nif_message(active_task_name):
+    summary = reload_nif_runtime_configuration()
+    message = (
+        "NIF rules reloaded successfully. "
+        f"Rules: {summary.get('rules_count', 0)}, "
+        f"Glossary terms: {summary.get('glossary_count', 0)}, "
+        f"Dropdown lists: {summary.get('dropdown_lists', 0)}, "
+        f"Legacy sessions refreshed: {summary.get('legacy_tasks_refreshed', 0)}."
+    )
+
+    rag_error = summary.get("rag_build_error")
+    if rag_error:
+        message += f" RAG rebuild warning: {rag_error}"
+    else:
+        message += " RAG artifacts refreshed."
+
+    if str(active_task_name or "").strip() == 'nifguide_task':
+        message += " Continue chatting to use the updated rules immediately."
+
+    return message
+
+
+def list_saved_nif_files_for_user(user_data):
+    """
+    List saved NIF files for a user as [{label, value}, ...].
+    """
+    _active_user_name, active_user_email = _resolve_active_user_identity(user_data)
+    user_nif_progress_dir = get_user_nif_progress_dir(active_user_email)
+    os.makedirs(user_nif_progress_dir, exist_ok=True)
+
+    file_options = []
+    for filename in get_available_files(user_nif_progress_dir):
+        if "." in filename:
+            label = filename.rsplit(".", 1)[0]
+        else:
+            label = filename
+        file_options.append({"label": label, "value": filename})
+    return file_options
+
+
+def save_nif_session(user_data, filename, user_nif_progress_json):
+    """
+    Shared service: save in-progress NIF dataframe to user-specific pickle file.
+    """
+    _active_user_name, active_user_email = _resolve_active_user_identity(user_data)
+
+    filename_clean = _sanitize_nif_filename(filename, default_name="")
+    if not filename_clean:
+        return {
+            "ok": False,
+            "code": "invalid_filename",
+            "message": "Please provide a valid file name.",
+        }
+
+    try:
+        user_nif_progress_df = _read_nif_progress_df_from_json(user_nif_progress_json)
+    except Exception:
+        return {
+            "ok": False,
+            "code": "invalid_progress_data",
+            "message": "NIF progress data is invalid. Please refresh and try again.",
+        }
+
+    user_nif_progress_dir = get_user_nif_progress_dir(active_user_email)
+    os.makedirs(user_nif_progress_dir, exist_ok=True)
+
+    try:
+        output_filename = f"{filename_clean}.pkl"
+        output_path = user_nif_progress_dir / output_filename
+        user_nif_progress_df.to_pickle(output_path)
+    except Exception as exc:
+        return {
+            "ok": False,
+            "code": "save_failed",
+            "message": f"Failed to save NIF progress: {exc}",
+        }
+
+    return {
+        "ok": True,
+        "code": "ok",
+        "message": f"Progress saved to {filename_clean}.",
+        "saved_filename": output_filename,
+        "saved_label": filename_clean,
+        "files": list_saved_nif_files_for_user(user_data),
+    }
+
+
+def start_new_nif_session(user_data, active_sid, current_clicks):
+    """
+    Shared service: initialize a new NIF step-by-step session.
+    """
+    active_user_name, active_user_email = _resolve_active_user_identity(user_data)
+    active_task_name = "nifguide_task"
+    display_text = (
+        "New NIF RAG v2 engine is active."
+        if NIF_CHAT_ENGINE == "rag_v2"
+        else ""
+    )
+    if NIF_CHAT_ENGINE == "rag_v2":
+        reset_nif_rag_state(active_sid, active_user_email)
+
+    submit_text = "Start a new NIF with field 'LIM'"
+    new_clicks = (current_clicks or 0) + 1
+
+    user_nif_progress_df = create_active_user_nif_progress_data()
+    requestor_date = f"{dt.datetime.now().strftime('%Y%m%d_%H%M%S')}"
+
+    user_nif_progress_df = update_nif_progress_data(user_nif_progress_df, "START REQ INITIATE", active_user_name, 1001)
+    user_nif_progress_df = update_nif_progress_data(user_nif_progress_df, "START REQ INITIATE", active_user_email, 1002)
+    user_nif_progress_df = update_nif_progress_data(user_nif_progress_df, "START REQ INITIATE", requestor_date, 1003)
+    user_nif_progress_df = update_nif_progress_data(user_nif_progress_df, "START REQ INITIATE", "0.0.0", 1004)
+    user_nif_progress_df = update_nif_progress_data(user_nif_progress_df, "START REQ INITIATE", active_user_name, 1005)
+
+    return {
+        "ok": True,
+        "code": "ok",
+        "message": "",
+        "session_id": str(active_sid or ""),
+        "active_task_name": active_task_name,
+        "submit_clicks": new_clicks,
+        "human_chat_value": submit_text,
+        "nif_progress_data_json": user_nif_progress_df.to_json(orient="split"),
+        "simple_message": display_text,
+        "auto_submit": True,
+    }
+
+
+def load_saved_nif_session(user_data, active_sid, current_clicks, selected_nif_file):
+    """
+    Shared service: load a saved NIF file and build resume submit payload.
+    """
+    _active_user_name, active_user_email = _resolve_active_user_identity(user_data)
+    active_task_name = "nifguide_task"
+
+    filename = str(selected_nif_file or "").strip()
+    if not filename or filename == NO_USER_NIFS_MESSAGE:
+        return {
+            "ok": False,
+            "code": "no_file_selected",
+            "message": "Please select a file from the dropdown to load.",
+        }
+
+    user_nif_progress_dir = get_user_nif_progress_dir(active_user_email)
+    selected_file_with_path = user_nif_progress_dir / filename
+    if not os.path.isfile(selected_file_with_path):
+        return {
+            "ok": False,
+            "code": "file_not_found",
+            "message": f"File '{filename}' not found. Please refresh and try again.",
+        }
+
+    try:
+        user_nif_progress_df = pd.read_pickle(selected_file_with_path)
+    except Exception:
+        return {
+            "ok": False,
+            "code": "invalid_pickle",
+            "message": f"Could not load '{filename}'. The file is corrupted or invalid.",
+        }
+
+    try:
+        if "_agentref_last_question_answered" in user_nif_progress_df.columns:
+            last_question_answered = str(user_nif_progress_df["_agentref_last_question_answered"].item())
+        else:
+            last_question_answered = ""
+        if "_agentref_last_answer_given" in user_nif_progress_df.columns:
+            last_answer_given = str(user_nif_progress_df["_agentref_last_answer_given"].item())
+        else:
+            last_answer_given = ""
+    except Exception:
+        last_question_answered = ""
+        last_answer_given = ""
+
+    submit_text = build_nif_resume_submit_text(
+        user_nif_progress_df=user_nif_progress_df,
+        last_question_answered=last_question_answered,
+        last_answer_given=last_answer_given,
+        engine_mode=NIF_CHAT_ENGINE,
+    )
+
+    if NIF_CHAT_ENGINE == "rag_v2":
+        reset_nif_rag_state(active_sid, active_user_email)
+
+    if "." in filename:
+        filename_label = filename.rsplit(".", 1)[0]
+    else:
+        filename_label = filename
+
+    if NIF_CHAT_ENGINE == "rag_v2":
+        display_text = (
+            f"Prior NIF '{filename_label}' loaded successfully. "
+            "Submitting resume request to New NIF RAG v2 engine."
+        )
+    else:
+        display_text = (
+            f"Prior NIF '{filename_label}' loaded successfully. "
+            "Submitting resume request to agent."
+        )
+
+    return {
+        "ok": True,
+        "code": "ok",
+        "message": "",
+        "session_id": str(active_sid or ""),
+        "active_task_name": active_task_name,
+        "submit_clicks": (current_clicks or 0) + 1,
+        "human_chat_value": submit_text,
+        "nif_progress_data_json": user_nif_progress_df.to_json(orient="split"),
+        "simple_message": display_text,
+        "auto_submit": True,
+        "loaded_filename": filename,
+    }
+
+
 # NIF file selection, NIF loading, and closes the modal
 @app.callback(
     # Outputs for the main application to update chat/data
@@ -4956,63 +5221,24 @@ def load_nif_from_modal(n_submit, selected_nif_file, user_data, active_sid, curr
     if n_submit is None or n_submit == 0:
         raise dash.exceptions.PreventUpdate
 
-    # Get user info for file path construction
-    active_user_email = user_data.get('email', 'user@email.com') if user_data else 'User_no_sso@email.com'
-
-    # Check for selected file
-    if not selected_nif_file:
-        display_text = 'Error: Please select a file from the dropdown to load.'
-        # Keep modal open
+    load_result = load_saved_nif_session(
+        user_data=user_data,
+        active_sid=active_sid,
+        current_clicks=current_clicks,
+        selected_nif_file=selected_nif_file,
+    )
+    if not load_result.get("ok"):
+        display_text = f"Error: {load_result.get('message', 'Failed to load saved NIF.')}"
         return no_update, no_update, no_update, display_text, no_update, dash.no_update
 
-    # File path construction
-    user_nif_progress_dir = get_user_nif_progress_dir(active_user_email)
-    selected_file_with_path = user_nif_progress_dir / f"{selected_nif_file}"
-
-    # File check and loading logic
-    if os.path.isfile(selected_file_with_path):
-
-        # Read file
-        user_nif_progress_df = pd.read_pickle(selected_file_with_path)
-
-        # Write to JSON for dcc.Store
-        user_nif_progress_json = user_nif_progress_df.to_json(orient='split')
-
-        # Submit to LLM - Prepare trigger message
-        last_question_answered = user_nif_progress_df['_agentref_last_question_answered'].item()
-        last_answer_given = user_nif_progress_df['_agentref_last_answer_given'].item()
-
-        new_clicks = (current_clicks or 0) + 1
-        f_name, f_ext = selected_nif_file.rsplit('.', 1)
-
-        submit_text = build_nif_resume_submit_text(
-            user_nif_progress_df=user_nif_progress_df,
-            last_question_answered=str(last_question_answered),
-            last_answer_given=str(last_answer_given),
-            engine_mode=NIF_CHAT_ENGINE,
-        )
-        if NIF_CHAT_ENGINE == "rag_v2":
-            reset_nif_rag_state(active_sid, active_user_email)
-        if NIF_CHAT_ENGINE == "rag_v2":
-            display_text = (
-                f"Prior NIF '{f_name}' loaded successfully. "
-                "Submitting resume request to New NIF RAG v2 engine."
-            )
-        else:
-            display_text = f"Prior NIF '{f_name}' loaded successfully. Submitting resume request to agent."
-
-        return (
-            submit_text,         # Human chat area
-            new_clicks,          # Submit button (incremented)
-            user_nif_progress_json, # NIF progress data
-            display_text,        # Simple message
-            False,                # Close the modal
-            RESET_NIF_SELECTION
-        )
-    else:
-        display_text = f"Error: File '{selected_nif_file}' not found. Please try again."
-        # Keep modal open
-        return no_update, no_update, no_update, display_text, no_update, dash.no_update
+    return (
+        load_result.get("human_chat_value"),
+        load_result.get("submit_clicks"),
+        load_result.get("nif_progress_data_json"),
+        load_result.get("simple_message"),
+        False,
+        RESET_NIF_SELECTION,
+    )
 
 # Dynamically load file options into the modal's dropdown
 @app.callback(
@@ -5025,27 +5251,11 @@ def populate_file_dropdown(is_open, user_data):
     if not is_open:
         raise dash.exceptions.PreventUpdate # Only run when modal opens
 
-    # Get user info for path construction
-    active_user_email = user_data.get('email', 'user@email.com') if user_data else 'User_no_sso@email.com'
+    file_list = list_saved_nif_files_for_user(user_data)
+    if file_list:
+        return file_list
 
-    # Construct user-specific folder path
-    user_nif_progress_dir = get_user_nif_progress_dir(active_user_email)
-    os.makedirs(user_nif_progress_dir, exist_ok=True) # Ensure directory exists
-
-    # Get the list of files
-    files = get_available_files(user_nif_progress_dir)
-    file_list = []
-
-    if files:
-        for f in files:
-            # Assuming file names include extensions, e.g., 'nif_20230101.pkl'
-            f_name = f.rsplit('.', 1)[0]
-            file_list.append({'label': f_name, 'value': f})
-    else:
-        # If no files, return an option that serves as a placeholder
-        file_list.append({'label': "No saved NIFs found.", 'value': 'NO_USER_NIFS_MESSAGE', 'disabled': True})
-
-    return file_list
+    return [{'label': "No saved NIFs found.", 'value': 'NO_USER_NIFS_MESSAGE', 'disabled': True}]
 
 # # Use display_text to give the user instructions
 # @app.callback(
@@ -5106,54 +5316,17 @@ def update_textarea_and_trigger_submit_chat(selected_question, current_clicks, u
         )
 
     if selected_question == 'NEW_NIF_CHAT':
-        active_task_name = 'nifguide_task'
-        display_text = (
-            "New NIF RAG v2 engine is active."
-            if NIF_CHAT_ENGINE == "rag_v2"
-            else ""
+        start_result = start_new_nif_session(
+            user_data=user_data,
+            active_sid=active_sid,
+            current_clicks=current_clicks,
         )
-        if NIF_CHAT_ENGINE == "rag_v2":
-            reset_nif_rag_state(active_sid, active_user_email)
-
-        # Use submit_text to give the agent an indication of where to start
-        submit_text = "Start a new NIF with field 'LIM'"
-
-        # Update n_clicks for submit button
-        new_clicks = (current_clicks or 0) + 1
-
-        # Create new active progress data
-        user_nif_progress_df = create_active_user_nif_progress_data()
-
-        # Auto-populate the first few fields
-        '''
-        Capture "Requestor Name" (1001) from user logged in.
-        Capture "Requestor Email" (1002) from user logged in.
-        Capture "Requestor Date" (1003) from current date.
-        Capture "Version" (1004) from current version of NIF form.
-        Capture "Requestor" (1005) from user logged in, which matches with the drop down of the user roles. {This assigns security within the NIF form.}
-        Go to LIM.
-        '''
-        REQUESTOR_NAME = active_user_name
-        REQUESTOR_EMAIL = active_user_email
-        REQUESTOR_DATE = f"{dt.datetime.now().strftime('%Y%m%d_%H%M%S')}"
-        NIF_FORM_VERSION = '0.0.0'
-        REQUESTOR = active_user_name
-
-        user_nif_progress_df = update_nif_progress_data(user_nif_progress_df, 'START REQ INITIATE', REQUESTOR_NAME, 1001)
-        user_nif_progress_df = update_nif_progress_data(user_nif_progress_df, 'START REQ INITIATE', REQUESTOR_EMAIL, 1002)
-        user_nif_progress_df = update_nif_progress_data(user_nif_progress_df, 'START REQ INITIATE', REQUESTOR_DATE, 1003)
-        user_nif_progress_df = update_nif_progress_data(user_nif_progress_df, 'START REQ INITIATE', NIF_FORM_VERSION, 1004)
-        user_nif_progress_df = update_nif_progress_data(user_nif_progress_df, 'START REQ INITIATE', REQUESTOR, 1005)
-
-        # Write to JSON for dcc.Store
-        user_nif_progress_json = user_nif_progress_df.to_json(orient='split')
-
         return (
-            submit_text,      # Human chat area
-            new_clicks,      # Submit button
-            user_nif_progress_json,      # NIF progress data
-            active_task_name,      # Active task name
-            display_text,    # Simple message
+            start_result.get("human_chat_value"),
+            start_result.get("submit_clicks"),
+            start_result.get("nif_progress_data_json"),
+            start_result.get("active_task_name"),
+            start_result.get("simple_message"),
         )
 
     if selected_question == 'LOAD_NIF':
@@ -5377,7 +5550,14 @@ def chat_bot(n_sub, human_chat_value, user_data, sid, user_nif_progress_json, ac
     #     global_socket_id = socket_id
 
     # Submitting question/system text updates
-    if ctx.triggered_id == "submit-button":
+    # Dash callbacks provide ctx.triggered_id. API calls invoke this function
+    # directly, so default to submit-button when callback context is absent.
+    try:
+        triggered_id = ctx.triggered_id
+    except Exception:
+        triggered_id = "submit-button"
+
+    if triggered_id == "submit-button":
         nif_query_result_data = None
         nif_llm_prompt_data = None
         expected_nifguide_qid = ""
@@ -5860,40 +6040,15 @@ def handle_feedback_save(n_clicks, user_data, active_sid, current_class):
     prevent_initial_call=True
 )
 def save_nif_in_progress(n_clicks, filename, user_nif_progress_json, user_data, active_sid):
-    # Read NIF progress data
-    user_nif_progress_df = pd.read_json(user_nif_progress_json, orient='split')
-
-    # Get user info from SSO
-    if not user_data:   # When running on local or if SSO is not functioning
-        active_user_name = 'User_no_sso'
-        active_user_email = 'User_no_sso@email.com'
-    else:
-        active_user_name = user_data.get('name', 'User')
-        active_user_email = user_data.get('email', 'user@email.com')
-
-    # Construct user-specific folder path
-    user_nif_progress_dir = get_user_nif_progress_dir(active_user_email)
-    save_dir = user_nif_progress_dir
-    os.makedirs(save_dir, exist_ok=True)
-
-    try:
-        # Clean filename
-        filename_touse = re.sub('[^A-Za-z0-9 ._-]+', '', filename)      # Remove all characters not in set A-Za-z0-9(space)(period)(underscore)(dash)
-
-        # Save file
-        user_nif_progress_df.to_pickle(os.path.join(save_dir, f"{filename_touse}.pkl"))
-
-    except Exception as e:
-        print(f"Error saving file: {str(e)}")
-
-    # Update file list
-    files = get_available_files(save_dir)
-    file_list = []  # Initialize
-    for f in files:
-        f_name, f_ext = f.rsplit('.', 1)
-        file_list.append({'label': f_name, 'value': f})
-
-    return file_list
+    save_result = save_nif_session(
+        user_data=user_data,
+        filename=filename,
+        user_nif_progress_json=user_nif_progress_json,
+    )
+    if not save_result.get("ok"):
+        print(f"<save_nif_in_progress> {save_result.get('message', 'Failed to save progress.')}")
+        return list_saved_nif_files_for_user(user_data)
+    return save_result.get("files", [])
 
 # Toggle save NIF in progress dialog box
 @app.callback(
@@ -5922,17 +6077,9 @@ def toggle_save_nif_progress_box(save_progress_clicks, filename, is_open):
     prevent_initial_call=True
 )
 def download_file(n_clicks, filename, user_nif_progress_json):
-    # Read json from dcc.Store
-    user_nif_progress_df = pd.read_json(user_nif_progress_json, orient='split')
-
-    # Remove internal columns
-    user_nif_progress_df_fordl = user_nif_progress_df.drop(columns=['_agentref_last_question_answered', '_agentref_last_answer_given'])
-
-    # Transpose for legibility
-    user_nif_progress_df_fordl_t = user_nif_progress_df_fordl.transpose()
-
-    # Convert to CSV and trigger download
-    return dcc.send_data_frame(user_nif_progress_df_fordl_t.to_csv, f"{filename}.csv", header=False)
+    filename_clean = _sanitize_nif_filename(filename)
+    user_nif_progress_df_fordl_t = build_nif_progress_download_frame(user_nif_progress_json)
+    return dcc.send_data_frame(user_nif_progress_df_fordl_t.to_csv, f"{filename_clean}.csv", header=False)
 
 # Chat History Amount toggle
 @app.callback(
@@ -5979,30 +6126,15 @@ def toggle_switch_visibility_by_clicks(n_clicks):
     prevent_initial_call=True
 )
 def show_progress(nif_progress_button_clicks, user_nif_progress_json, is_open):
-    try:
-       	# Read NIF progress data
-        user_nif_progress_df = pd.read_json(user_nif_progress_json, orient='split')
-
-        # Remove internal columns
-        user_nif_progress_df_display = user_nif_progress_df.drop(columns=['_agentref_last_question_answered', '_agentref_last_answer_given'])
-
-        dictionary_todisplay = user_nif_progress_df_display.to_dict(orient='list')
-        output_string = ""  # Initialize
-        for FIELD, VALUE in dictionary_todisplay.items():
-            output_string = output_string + f"{FIELD}: {VALUE}\n"
-
-        # Putting this in an html.Pre() to preserve newlines and formatting
-        modal_body = html.Pre(
-            output_string,
-            style={
-                'fontSize': '12px',
-                'fontFamily': 'monospace',
-                'whiteSpace': 'pre-wrap'
-            }
-        )
-
-    except:
-        modal_body = "No progress data found."
+    preview_result = build_nif_progress_preview_text(user_nif_progress_json)
+    modal_body = html.Pre(
+        preview_result.get("progress_text", "No progress data found."),
+        style={
+            'fontSize': '12px',
+            'fontFamily': 'monospace',
+            'whiteSpace': 'pre-wrap'
+        }
+    )
 
     return not is_open, modal_body
 
@@ -6268,6 +6400,411 @@ def display_user(user_data):
         ],
         style={'textAlign': 'right', 'paddingRight': '15px'}
     )
+
+
+# =============================================================================
+#### API v1 routes for React UI (parallel to Dash UI)
+# =============================================================================
+def _as_api_value(value, fallback=None):
+    """
+    Convert Dash callback no_update sentinel into API-friendly values.
+    """
+    if value is no_update:
+        return fallback
+    return value
+
+
+def _api_user_payload():
+    """
+    Prefer Flask g.user (server-trusted identity), fallback to local defaults.
+    """
+    user = g.user if getattr(g, "user", None) else {}
+    if not user:
+        return {
+            "name": "User_no_sso",
+            "email": "User_no_sso@email.com",
+            "roles": [],
+        }
+    return {
+        "name": user.get("name") or "User",
+        "email": user.get("email") or "user@email.com",
+        "roles": user.get("roles") or [],
+        "sub": user.get("sub"),
+        "upn": user.get("upn"),
+    }
+
+
+def _allowed_react_origins():
+    raw = os.getenv("REACT_UI_ALLOWED_ORIGINS", "http://localhost:5173")
+    return {
+        origin.strip()
+        for origin in str(raw).split(",")
+        if origin.strip()
+    }
+
+
+@app.server.after_request
+def _apply_api_cors_headers(response):
+    """
+    Restrict cross-origin API access to an explicit allow-list.
+    """
+    if request.path.startswith("/api/v1/"):
+        origin = (request.headers.get("Origin") or "").strip()
+        if origin and origin in _allowed_react_origins():
+            response.headers["Access-Control-Allow-Origin"] = origin
+            response.headers["Vary"] = "Origin"
+            response.headers["Access-Control-Allow-Methods"] = "GET,POST,OPTIONS"
+            response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
+            response.headers["Access-Control-Allow-Credentials"] = "true"
+    return response
+
+
+@app.server.route("/api/v1/<path:_path>", methods=["OPTIONS"])
+def api_preflight(_path):
+    return flask.Response(status=204)
+
+
+@app.server.route("/api/v1/health/live", methods=["GET"])
+def api_health_live():
+    return flask.jsonify(
+        {
+            "status": "ok",
+            "version": version_number,
+            "llm_provider": APP_LLM_PROVIDER,
+            "llm_model": APP_LLM_MODEL,
+            "llm_header_text": APP_LLM_HEADER_TEXT,
+            "timestamp_utc": dt.datetime.now(dt.UTC).isoformat(),
+        }
+    )
+
+
+@app.server.route("/api/v1/me", methods=["GET"])
+def api_me():
+    return flask.jsonify({"user": _api_user_payload()})
+
+
+@app.server.route("/api/v1/session", methods=["POST"])
+def api_create_session():
+    sid = generate_session_id()
+    user_payload = _api_user_payload()
+    return flask.jsonify(
+        {
+            "session_id": sid,
+            "user": user_payload,
+            "active_task_name": "nifguide_task",
+            "nif_progress_data_json": pd.DataFrame(index=[0]).to_json(orient="split"),
+            "llm_provider": APP_LLM_PROVIDER,
+            "llm_model": APP_LLM_MODEL,
+            "llm_header_text": APP_LLM_HEADER_TEXT,
+        }
+    )
+
+
+@app.server.route("/api/v1/modules", methods=["GET"])
+def api_modules():
+    return flask.jsonify(
+        {
+            "modules": [
+                {"label": "Get started On New training resources", "selected_question": "Get started on training resources"},
+                {"label": "NIF Step by Step", "selected_question": "NIF step by step"},
+                {"label": "Search NIF", "selected_question": "Search NIF"},
+                {"label": "NIF Field question", "selected_question": "NIF field question"},
+            ]
+        }
+    )
+
+
+def _react_step_feature_disabled_response():
+    return (
+        flask.jsonify(
+            {
+                "code": "feature_disabled",
+                "message": "Enhanced React NIF step flow is disabled. Set REACT_NIF_STEP_ENHANCED=true.",
+            }
+        ),
+        404,
+    )
+
+
+@app.server.route("/api/v1/nif/step/options", methods=["GET"])
+def api_nif_step_options():
+    if not REACT_NIF_STEP_ENHANCED:
+        return _react_step_feature_disabled_response()
+    return flask.jsonify(
+        {
+            "actions": [
+                {"id": "new", "label": "New NIF chat session"},
+                {"id": "load", "label": "Load NIF from previous chat"},
+            ]
+        }
+    )
+
+
+@app.server.route("/api/v1/nif/saved", methods=["GET"])
+def api_nif_saved_files():
+    if not REACT_NIF_STEP_ENHANCED:
+        return _react_step_feature_disabled_response()
+
+    file_options = list_saved_nif_files_for_user(_api_user_payload())
+    if file_options:
+        return flask.jsonify({"files": file_options, "message": ""})
+    return flask.jsonify({"files": [], "message": "No saved NIFs found."})
+
+
+@app.server.route("/api/v1/nif/new-session", methods=["POST"])
+def api_nif_new_session():
+    if not REACT_NIF_STEP_ENHANCED:
+        return _react_step_feature_disabled_response()
+
+    payload = request.get_json(silent=True) or {}
+    active_sid = str(payload.get("session_id", "") or "").strip() or generate_session_id()
+    current_clicks = int(payload.get("submit_clicks", 0) or 0)
+
+    start_result = start_new_nif_session(
+        user_data=_api_user_payload(),
+        active_sid=active_sid,
+        current_clicks=current_clicks,
+    )
+    return flask.jsonify(start_result)
+
+
+@app.server.route("/api/v1/nif/load-session", methods=["POST"])
+def api_nif_load_session():
+    if not REACT_NIF_STEP_ENHANCED:
+        return _react_step_feature_disabled_response()
+
+    payload = request.get_json(silent=True) or {}
+    active_sid = str(payload.get("session_id", "") or "").strip() or generate_session_id()
+    current_clicks = int(payload.get("submit_clicks", 0) or 0)
+    selected_nif_file = str(payload.get("filename", "") or "").strip()
+
+    load_result = load_saved_nif_session(
+        user_data=_api_user_payload(),
+        active_sid=active_sid,
+        current_clicks=current_clicks,
+        selected_nif_file=selected_nif_file,
+    )
+    if not load_result.get("ok"):
+        return (
+            flask.jsonify(
+                {
+                    "code": load_result.get("code", "load_failed"),
+                    "message": load_result.get("message", "Failed to load saved NIF session."),
+                }
+            ),
+            400,
+        )
+    return flask.jsonify(load_result)
+
+
+@app.server.route("/api/v1/nif/save-session", methods=["POST"])
+def api_nif_save_session():
+    if not REACT_NIF_STEP_ENHANCED:
+        return _react_step_feature_disabled_response()
+
+    payload = request.get_json(silent=True) or {}
+    filename = str(payload.get("filename", "") or "").strip()
+    user_nif_progress_json = payload.get("nif_progress_data_json")
+
+    save_result = save_nif_session(
+        user_data=_api_user_payload(),
+        filename=filename,
+        user_nif_progress_json=user_nif_progress_json,
+    )
+    if not save_result.get("ok"):
+        return (
+            flask.jsonify(
+                {
+                    "code": save_result.get("code", "save_failed"),
+                    "message": save_result.get("message", "Failed to save NIF progress."),
+                }
+            ),
+            400,
+        )
+    return flask.jsonify(save_result)
+
+
+@app.server.route("/api/v1/nif/reload-config", methods=["POST"])
+def api_nif_reload_config():
+    if not REACT_NIF_STEP_ENHANCED:
+        return _react_step_feature_disabled_response()
+
+    payload = request.get_json(silent=True) or {}
+    active_task_name = str(payload.get("active_task_name", "nifguide_task") or "nifguide_task").strip()
+
+    try:
+        message = build_reload_nif_message(active_task_name)
+        return flask.jsonify({"ok": True, "code": "ok", "message": message})
+    except Exception as err:
+        return (
+            flask.jsonify(
+                {
+                    "code": "reload_failed",
+                    "message": f"Failed to reload NIF rules at runtime. Details: {err}",
+                }
+            ),
+            500,
+        )
+
+
+@app.server.route("/api/v1/nif/progress-preview", methods=["POST"])
+def api_nif_progress_preview():
+    if not REACT_NIF_STEP_ENHANCED:
+        return _react_step_feature_disabled_response()
+
+    payload = request.get_json(silent=True) or {}
+    preview_result = build_nif_progress_preview_text(payload.get("nif_progress_data_json"))
+    if not preview_result.get("ok"):
+        return (
+            flask.jsonify(
+                {
+                    "code": preview_result.get("code", "no_progress_data"),
+                    "message": preview_result.get("message", "No progress data found."),
+                }
+            ),
+            400,
+        )
+    return flask.jsonify(preview_result)
+
+
+@app.server.route("/api/v1/nif/download", methods=["POST"])
+def api_nif_download_file():
+    if not REACT_NIF_STEP_ENHANCED:
+        return _react_step_feature_disabled_response()
+
+    payload = request.get_json(silent=True) or {}
+    filename_clean = _sanitize_nif_filename(payload.get("filename"))
+
+    try:
+        download_df = build_nif_progress_download_frame(payload.get("nif_progress_data_json"))
+        csv_text = download_df.to_csv(header=False)
+    except Exception:
+        return (
+            flask.jsonify(
+                {
+                    "code": "download_failed",
+                    "message": "No progress data found to download.",
+                }
+            ),
+            400,
+        )
+
+    response = flask.Response(csv_text, mimetype="text/csv")
+    response.headers["Content-Disposition"] = f'attachment; filename="{filename_clean}.csv"'
+    return response
+
+
+@app.server.route("/api/v1/modules/select", methods=["POST"])
+def api_select_module():
+    payload = request.get_json(silent=True) or {}
+    selected_question = str(payload.get("selected_question", "") or "").strip()
+    current_clicks = int(payload.get("current_clicks", 0) or 0)
+    active_sid = str(payload.get("session_id", "") or "").strip() or generate_session_id()
+    selected_nif_file = payload.get("selected_nif_file")
+
+    user_payload = _api_user_payload()
+
+    (
+        next_human_chat_value,
+        next_clicks,
+        next_nif_progress_json,
+        next_active_task_name,
+        next_simple_message,
+    ) = update_textarea_and_trigger_submit_chat(
+        selected_question=selected_question,
+        current_clicks=current_clicks,
+        user_data=user_payload,
+        active_sid=active_sid,
+        selected_nif_file=selected_nif_file,
+    )
+
+    human_chat_value = _as_api_value(next_human_chat_value, "")
+    submit_clicks = _as_api_value(next_clicks, current_clicks)
+    nif_progress_json = _as_api_value(next_nif_progress_json, payload.get("nif_progress_data_json"))
+    active_task_name = _as_api_value(next_active_task_name, payload.get("active_task_name") or "nifguide_task")
+    simple_message = _as_api_value(next_simple_message, "")
+
+    auto_submit = bool(
+        isinstance(human_chat_value, str)
+        and human_chat_value.strip()
+        and submit_clicks != current_clicks
+    )
+
+    return flask.jsonify(
+        {
+            "session_id": active_sid,
+            "selected_question": selected_question,
+            "human_chat_value": human_chat_value,
+            "submit_clicks": submit_clicks,
+            "nif_progress_data_json": nif_progress_json,
+            "active_task_name": active_task_name,
+            "simple_message": simple_message,
+            "auto_submit": auto_submit,
+        }
+    )
+
+
+@app.server.route("/api/v1/chat/turn", methods=["POST"])
+def api_chat_turn():
+    payload = request.get_json(silent=True) or {}
+
+    sid = str(payload.get("session_id", "") or "").strip() or generate_session_id()
+    active_task_name = str(payload.get("active_task_name", "nifguide_task") or "nifguide_task").strip()
+    human_chat_value = str(payload.get("human_chat_value", "") or "").strip()
+    n_sub = int(payload.get("submit_clicks", 1) or 1)
+
+    incoming_progress_json = payload.get("nif_progress_data_json")
+    if not incoming_progress_json:
+        incoming_progress_json = pd.DataFrame(index=[0]).to_json(orient="split")
+
+    user_payload = _api_user_payload()
+
+    (
+        response_markdown,
+        next_nif_progress_json,
+        _cleared_input_value,
+        nif_query_result_data,
+        nif_llm_prompt_data,
+    ) = chat_bot(
+        n_sub=n_sub,
+        human_chat_value=human_chat_value,
+        user_data=user_payload,
+        sid=sid,
+        user_nif_progress_json=incoming_progress_json,
+        active_task_name=active_task_name,
+    )
+
+    return flask.jsonify(
+        {
+            "session_id": sid,
+            "active_task_name": active_task_name,
+            "response_markdown": _as_api_value(response_markdown, ""),
+            "nif_progress_data_json": _as_api_value(next_nif_progress_json, incoming_progress_json),
+            "nif_query_result": _as_api_value(nif_query_result_data, None),
+            "nif_llm_prompt": _as_api_value(nif_llm_prompt_data, None),
+        }
+    )
+
+
+@app.server.route("/react", defaults={"path": ""})
+@app.server.route("/react/<path:path>")
+def serve_react_ui(path: str):
+    """
+    Serve the built React UI bundle from react-ui/dist if present.
+    """
+    react_dist = os.path.join(CURRENT_FOLDER_DASH_APP, "react-ui", "dist")
+    if not os.path.isdir(react_dist):
+        return flask.Response(
+            "React UI build not found. Run: cd react-ui && npm install && npm run build",
+            status=404,
+            mimetype="text/plain",
+        )
+
+    if path:
+        candidate = os.path.join(react_dist, path)
+        if os.path.isfile(candidate):
+            return flask.send_from_directory(react_dist, path)
+    return flask.send_from_directory(react_dist, "index.html")
 
 #%% 6. RUN APP
 #############################################################################################################

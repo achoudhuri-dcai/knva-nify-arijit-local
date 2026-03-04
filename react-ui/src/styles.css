@@ -1,0 +1,1113 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap");
+
+:root {
+  --shell-bg: radial-gradient(circle at 12% 18%, rgba(37, 99, 235, 0.14), transparent 42%),
+    radial-gradient(circle at 88% 78%, rgba(30, 64, 175, 0.15), transparent 46%),
+    linear-gradient(180deg, #f8fbff 0%, #edf3ff 100%);
+  --panel-bg: rgba(255, 255, 255, 0.92);
+  --panel-border: rgba(15, 23, 42, 0.08);
+  --shadow-soft: 0 14px 32px rgba(15, 23, 42, 0.08);
+  --chat-assistant-bg: rgba(5, 150, 105, 0.14);
+  --chat-assistant-border: rgba(5, 150, 105, 0.34);
+  --chat-user-bg: rgba(30, 64, 175, 0.16);
+  --chat-user-border: rgba(30, 64, 175, 0.34);
+  --chat-panel-bg: rgba(226, 232, 240, 0.74);
+  --chat-panel-border: rgba(15, 23, 42, 0.12);
+  --ambient-a: rgba(37, 99, 235, 0.42);
+  --ambient-b: rgba(30, 64, 175, 0.36);
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --control-bg: rgba(255, 255, 255, 0.86);
+  --control-border: rgba(15, 23, 42, 0.2);
+  --menu-bg: rgba(255, 255, 255, 0.98);
+  --menu-border: rgba(15, 23, 42, 0.1);
+  --footer-bg: rgba(255, 255, 255, 0.74);
+  --footer-border: rgba(15, 23, 42, 0.14);
+  --footer-text: #334155;
+  --footer-kicker: #1e3a8a;
+  --footer-accent: rgba(29, 78, 216, 0.92);
+  --datagrid-header-bg: rgba(37, 99, 235, 0.1);
+  --datagrid-header-fg: #0f2548;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--shell-bg);
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 13.5px;
+  line-height: 1.35;
+  transition: background 180ms ease-out;
+}
+
+body.theme-dark {
+  color-scheme: dark;
+  --shell-bg: radial-gradient(circle at 12% 18%, rgba(59, 130, 246, 0.2), transparent 42%),
+    radial-gradient(circle at 88% 78%, rgba(99, 102, 241, 0.2), transparent 46%),
+    linear-gradient(180deg, #0b1220 0%, #111827 100%);
+  --panel-bg: rgba(17, 24, 39, 0.92);
+  --panel-border: rgba(148, 163, 184, 0.24);
+  --shadow-soft: 0 14px 32px rgba(2, 6, 23, 0.46);
+  --chat-assistant-bg: rgba(16, 185, 129, 0.24);
+  --chat-assistant-border: rgba(52, 211, 153, 0.44);
+  --chat-user-bg: rgba(99, 102, 241, 0.26);
+  --chat-user-border: rgba(129, 140, 248, 0.46);
+  --chat-panel-bg: rgba(2, 6, 23, 0.64);
+  --chat-panel-border: rgba(148, 163, 184, 0.28);
+  --ambient-a: rgba(59, 130, 246, 0.46);
+  --ambient-b: rgba(99, 102, 241, 0.46);
+  --text-primary: #e5e7eb;
+  --text-secondary: #9ca3af;
+  --control-bg: rgba(30, 41, 59, 0.88);
+  --control-border: rgba(148, 163, 184, 0.36);
+  --menu-bg: rgba(17, 24, 39, 0.98);
+  --menu-border: rgba(148, 163, 184, 0.24);
+  --footer-bg: rgba(2, 6, 23, 0.78);
+  --footer-border: rgba(148, 163, 184, 0.28);
+  --footer-text: #cbd5e1;
+  --footer-kicker: #bfdbfe;
+  --footer-accent: rgba(96, 165, 250, 0.95);
+  --datagrid-header-bg: rgba(30, 64, 175, 0.35);
+  --datagrid-header-fg: #dbeafe;
+}
+
+body .MuiTypography-root,
+body .MuiButton-root,
+body .MuiInputBase-root,
+body .MuiFormLabel-root,
+body .MuiMenuItem-root,
+body .MuiChip-root,
+body .MuiTablePagination-root,
+body .MuiDataGrid-root {
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
+}
+
+body .MuiTypography-h6 {
+  font-size: 1.02rem !important;
+}
+
+body .MuiTypography-subtitle1,
+body .MuiTypography-subtitle2 {
+  font-size: 0.86rem !important;
+}
+
+body .MuiTypography-body1,
+body .MuiTypography-body2 {
+  font-size: 0.8rem !important;
+  line-height: 1.32 !important;
+}
+
+body .MuiTypography-caption {
+  font-size: 0.72rem !important;
+}
+
+body .MuiButton-root {
+  font-size: 0.76rem !important;
+  min-height: 32px;
+  padding: 4px 10px;
+}
+
+body .MuiIconButton-root {
+  padding: 5px;
+}
+
+body .MuiInputBase-input {
+  font-size: 0.8rem !important;
+  padding-top: 8px !important;
+  padding-bottom: 8px !important;
+}
+
+body .MuiFormLabel-root {
+  font-size: 0.75rem !important;
+}
+
+body .MuiChip-root {
+  height: 22px;
+}
+
+body .MuiDataGrid-root {
+  font-size: 0.78rem !important;
+}
+
+body .MuiDataGrid-cell,
+body .MuiDataGrid-columnHeader {
+  padding-top: 2px;
+  padding-bottom: 2px;
+}
+
+body .MuiDataGrid-columnHeaders {
+  background: var(--datagrid-header-bg) !important;
+  color: var(--datagrid-header-fg);
+}
+
+body.theme-dark .MuiTypography-root {
+  color: var(--text-primary);
+}
+
+body.theme-dark .MuiTypography-colorTextSecondary {
+  color: var(--text-secondary) !important;
+}
+
+body.theme-dark .MuiPaper-root {
+  background: var(--panel-bg);
+  border-color: var(--panel-border);
+  color: #e5e7eb;
+}
+
+body.theme-dark .MuiInputBase-root {
+  color: var(--text-primary);
+  background: var(--control-bg);
+}
+
+body.theme-dark .MuiOutlinedInput-notchedOutline {
+  border-color: var(--control-border) !important;
+}
+
+body.theme-dark .MuiInputLabel-root {
+  color: var(--text-secondary) !important;
+}
+
+body.theme-dark .MuiInputBase-input::placeholder {
+  color: var(--text-secondary);
+  opacity: 0.9;
+}
+
+body.theme-dark .MuiDialog-paper,
+body.theme-dark .MuiPopover-paper,
+body.theme-dark .MuiMenu-paper,
+body.theme-dark .MuiAutocomplete-paper {
+  background: var(--menu-bg) !important;
+  color: var(--text-primary) !important;
+  border: 1px solid var(--menu-border);
+}
+
+body.theme-dark .MuiDialogTitle-root,
+body.theme-dark .MuiDialogContent-root,
+body.theme-dark .MuiDialogActions-root {
+  background: transparent;
+}
+
+body.theme-dark .MuiList-root .MuiMenuItem-root {
+  color: var(--text-primary);
+}
+
+body.theme-dark .MuiList-root .MuiMenuItem-root.Mui-focused,
+body.theme-dark .MuiList-root .MuiMenuItem-root:hover {
+  background: rgba(59, 130, 246, 0.2);
+}
+
+body.theme-dark .MuiAlert-root {
+  border: 1px solid var(--panel-border);
+}
+
+body.theme-dark .MuiAlert-standardInfo {
+  background: rgba(59, 130, 246, 0.2);
+  color: #dbeafe;
+}
+
+body.theme-dark .MuiAlert-standardWarning {
+  background: rgba(245, 158, 11, 0.18);
+  color: #fde68a;
+}
+
+body.theme-dark .MuiAlert-standardError {
+  background: rgba(239, 68, 68, 0.2);
+  color: #fecaca;
+}
+
+body.theme-dark .MuiChip-root {
+  background: rgba(37, 99, 235, 0.28);
+  color: #dbeafe;
+  border-color: rgba(96, 165, 250, 0.42);
+}
+
+body.theme-dark .MuiButton-outlined {
+  border-color: var(--control-border);
+  color: var(--text-primary);
+}
+
+body.theme-dark .MuiButton-text {
+  color: #cbd5e1;
+}
+
+body.theme-dark .MuiTablePagination-root,
+body.theme-dark .MuiTablePagination-toolbar,
+body.theme-dark .MuiTablePagination-selectLabel,
+body.theme-dark .MuiTablePagination-displayedRows {
+  color: var(--text-secondary);
+}
+
+body.theme-dark .MuiSvgIcon-root {
+  color: inherit;
+}
+
+body.theme-dark .MuiTooltip-tooltip {
+  background: rgba(2, 6, 23, 0.92);
+  color: #e5e7eb;
+  border: 1px solid rgba(148, 163, 184, 0.24);
+}
+
+body.theme-dark .MuiDataGrid-root {
+  color: var(--text-primary);
+  background: rgba(15, 23, 42, 0.45);
+  border-color: var(--panel-border);
+}
+
+body.theme-dark .MuiDataGrid-row {
+  background: transparent;
+}
+
+body.theme-dark .MuiDataGrid-row:hover {
+  background: rgba(59, 130, 246, 0.16);
+}
+
+body.theme-dark .MuiDataGrid-cell {
+  border-color: rgba(148, 163, 184, 0.18);
+}
+
+body.theme-dark .MuiDataGrid-footerContainer {
+  border-top-color: rgba(148, 163, 184, 0.2);
+}
+
+body.theme-dark .MuiDataGrid-overlay {
+  background: rgba(15, 23, 42, 0.6);
+}
+
+body.theme-dark .side-nav .side-nav-btn {
+  border-color: rgba(148, 163, 184, 0.28);
+  background: rgba(30, 41, 59, 0.8);
+  color: #cbd5e1;
+}
+
+body.theme-dark .side-nav .side-nav-btn.active {
+  border-color: rgba(96, 165, 250, 0.6);
+  background: rgba(37, 99, 235, 0.34);
+  color: #dbeafe;
+}
+
+#root {
+  height: 100vh;
+}
+
+.app-shell {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  padding: 0;
+  overflow: hidden;
+}
+
+.app-layout {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex: 1 1 auto;
+  gap: 6px;
+  height: auto;
+  min-height: 0;
+  padding: 6px 6px 70px;
+}
+
+.main-pane {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.side-nav {
+  flex: 0 0 auto;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  padding: 6px;
+  border-radius: 0;
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  box-shadow: var(--shadow-soft);
+  backdrop-filter: blur(8px);
+  overflow: hidden;
+}
+
+.side-nav .side-nav-btn {
+  width: 100%;
+  justify-content: flex-start;
+  border: 1px solid rgba(15, 23, 42, 0.09);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.72);
+  color: #1e3a8a;
+}
+
+.side-nav-toggle {
+  border: 1px solid rgba(15, 23, 42, 0.12) !important;
+  background: rgba(255, 255, 255, 0.76) !important;
+}
+
+.side-nav-expanded {
+  width: clamp(240px, 22vw, 360px);
+  min-width: 220px;
+  max-width: 520px;
+  resize: horizontal;
+}
+
+.side-nav-collapsed {
+  width: 76px;
+  min-width: 76px;
+  max-width: 76px;
+  resize: none;
+  overflow: hidden;
+}
+
+.side-nav-collapsed .side-nav-btn .MuiButton-startIcon {
+  margin: 0;
+}
+
+.side-nav .side-nav-btn.active {
+  border-color: rgba(37, 99, 235, 0.45);
+  background: rgba(37, 99, 235, 0.16);
+  color: #1d4ed8;
+}
+
+.side-nav-content {
+  min-height: 0;
+  padding-bottom: 44px;
+}
+
+.side-nav-menu-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.side-nav-theme-slot {
+  position: absolute;
+  left: 6px;
+  right: 6px;
+  bottom: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.side-nav-expanded .side-nav-theme-slot {
+  justify-content: flex-start;
+}
+
+.side-nav-theme-btn {
+  border: 1px solid rgba(15, 23, 42, 0.12) !important;
+  background: rgba(255, 255, 255, 0.76) !important;
+}
+
+.ambient-shape {
+  position: absolute;
+  border-radius: 999px;
+  filter: blur(36px);
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+.ambient-shape-a {
+  width: 260px;
+  height: 260px;
+  top: -70px;
+  left: -40px;
+  background: var(--ambient-a);
+}
+
+.ambient-shape-b {
+  width: 290px;
+  height: 290px;
+  right: -70px;
+  bottom: -90px;
+  background: var(--ambient-b);
+}
+
+.app-header {
+  position: relative;
+  z-index: 2;
+  min-height: 74px;
+  height: auto;
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 4px 10px;
+  border-radius: 0;
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  box-shadow: var(--shadow-soft);
+  backdrop-filter: blur(8px);
+}
+
+.header-brand {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  align-items: flex-start;
+  padding-top: 0;
+}
+
+.header-logo {
+  height: 34px;
+  width: auto;
+}
+
+.header-title {
+  font-size: 32px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.01em;
+  color: #14335f;
+  text-transform: none;
+  line-height: 1.05;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.35);
+  white-space: nowrap;
+  text-align: left;
+}
+
+body.theme-dark .header-title {
+  color: #dbeafe;
+  text-shadow: 0 1px 0 rgba(2, 6, 23, 0.45);
+}
+
+@media (max-width: 1280px) {
+  .header-title {
+    font-size: 32px !important;
+  }
+}
+
+.header-meta {
+  min-width: 0;
+}
+
+.header-powered-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  text-decoration: none;
+}
+
+.header-powered-text {
+  font-style: italic;
+  font-size: inherit !important;
+  font-weight: inherit !important;
+  letter-spacing: normal;
+  text-transform: none;
+  color: inherit;
+}
+
+.header-dcai-logo {
+  height: 0.94rem;
+  width: auto;
+  display: block;
+}
+
+@media (max-width: 1024px) {
+  .app-header {
+    min-height: 64px;
+    padding: 4px 8px;
+  }
+
+  .header-logo {
+    height: 30px;
+  }
+
+  .header-dcai-logo {
+    height: 0.79rem;
+  }
+}
+
+.header-dcai-logo-dark {
+  display: none;
+}
+
+body.theme-dark .header-dcai-logo-light {
+  display: none;
+}
+
+body.theme-dark .header-dcai-logo-dark {
+  display: block;
+}
+
+.theme-toggle-btn {
+  border: 1px solid rgba(15, 23, 42, 0.16) !important;
+  background: rgba(255, 255, 255, 0.8) !important;
+}
+
+body.theme-dark .theme-toggle-btn {
+  border-color: rgba(148, 163, 184, 0.36) !important;
+  background: rgba(30, 41, 59, 0.9) !important;
+}
+
+.workspace {
+  height: 100%;
+  margin-top: 0;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-bottom: 4px;
+}
+
+.app-footer-mini {
+  position: fixed;
+  left: -4px;
+  right: -4px;
+  bottom: 0;
+  z-index: 25;
+  min-height: 46px;
+  height: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: calc(100% + 8px);
+  padding: 4px 8px;
+  border-radius: 0;
+  border-top: 1px solid var(--panel-border);
+  background: rgba(248, 250, 252, 0.9);
+  backdrop-filter: blur(5px);
+}
+
+.app-footer-mini-content {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  flex-direction: column !important;
+  justify-content: center;
+  align-items: center;
+}
+
+.app-footer-mini-text {
+  margin: 0 auto !important;
+  width: 80%;
+  font-size: inherit !important;
+  font-weight: inherit !important;
+  line-height: 1.15;
+  text-align: center;
+  color: inherit;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+}
+
+.app-footer-mini-sep {
+  display: none;
+}
+
+.app-footer-mini-link {
+  flex: 0 0 auto;
+  margin-top: 2px;
+  font-size: inherit;
+  font-weight: inherit;
+  line-height: 1.1;
+  text-align: center;
+  color: #2563eb !important;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.app-footer-mini-link:hover {
+  text-decoration: underline;
+}
+
+body.theme-dark .app-footer-mini {
+  border-top-color: rgba(148, 163, 184, 0.28);
+  background: rgba(2, 6, 23, 0.88);
+}
+
+body.theme-dark .app-footer-mini-sep {
+  color: #94a3b8;
+}
+
+body.theme-dark .app-footer-mini-link {
+  color: #93c5fd !important;
+}
+
+.app-footer {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 30;
+  width: 100%;
+  padding: 1px 4px;
+  background: transparent;
+  border: none !important;
+  box-shadow: none !important;
+  pointer-events: none;
+}
+
+.footer-main {
+  position: relative;
+  width: 100%;
+  min-width: 0;
+  pointer-events: auto;
+  text-align: center;
+  align-items: center;
+  padding: 0;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  overflow: visible;
+}
+
+.footer-branding {
+  position: static;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  padding: 0;
+}
+
+.footer-powered-by {
+  font-size: 0.2rem !important;
+  font-weight: 500 !important;
+  letter-spacing: 0.02em;
+  color: var(--footer-text);
+  font-style: italic;
+  white-space: nowrap;
+}
+
+.footer-logo-link {
+  display: inline-flex;
+  align-items: center;
+  padding: 0;
+  border: none;
+  background: transparent;
+  transition: opacity 160ms ease-out;
+}
+
+.footer-logo-link:hover {
+  opacity: 0.86;
+}
+
+.dcai-logo {
+  height: 6px;
+  width: auto;
+  display: block;
+}
+
+.dcai-logo-dark {
+  display: none;
+}
+
+body.theme-dark .dcai-logo-light {
+  display: none;
+}
+
+body.theme-dark .dcai-logo-dark {
+  display: block;
+}
+
+.footer-legal-block {
+  min-width: 0;
+  flex: 1 1 auto;
+  max-width: 980px;
+  width: 100%;
+  padding-right: 0;
+  align-items: center;
+}
+
+.footer-kicker {
+  font-size: 0.24rem !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--footer-kicker);
+}
+
+.footer-legal-line {
+  min-width: 0;
+  text-align: center;
+  font-size: 0.18rem !important;
+  font-weight: 500 !important;
+  color: var(--footer-text);
+  line-height: 1.02;
+  white-space: normal;
+}
+
+.footer-terms-link {
+  margin-top: 0;
+  display: inline-block;
+  width: fit-content;
+  font-size: 0.18rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: #1d4ed8;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.footer-terms-link:hover {
+  text-decoration: underline;
+}
+
+body.theme-dark .footer-terms-link {
+  color: #93c5fd;
+}
+
+.chat-shell {
+  flex: 1 1 auto;
+  min-height: 220px;
+  border-radius: 12px;
+  border: 1px solid var(--chat-panel-border);
+  background: var(--chat-panel-bg);
+  box-shadow: var(--shadow-soft);
+  box-shadow: var(--shadow-soft), inset 0 1px 0 rgba(255, 255, 255, 0.14);
+}
+
+.chat-scroll {
+  height: 100%;
+  overflow: auto;
+  padding: 6px;
+}
+
+.chat-bubble {
+  max-width: min(94ch, 82%);
+  padding: 6px 8px;
+  border-radius: 12px;
+  border: 1px solid transparent;
+}
+
+.chat-bubble-assistant {
+  background: var(--chat-assistant-bg);
+  border-color: var(--chat-assistant-border);
+}
+
+.chat-bubble-user {
+  background: var(--chat-user-bg);
+  border-color: var(--chat-user-border);
+}
+
+.chat-markdown {
+  font-size: 0.82rem;
+  line-height: 1.42;
+}
+
+.chat-markdown a,
+.chat-markdown-link {
+  color: #1d4ed8;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.chat-markdown a:hover,
+.chat-markdown-link:hover {
+  text-decoration: underline;
+}
+
+body.theme-dark .chat-markdown a,
+body.theme-dark .chat-markdown-link {
+  color: #93c5fd;
+}
+
+.chat-message-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.chat-message-row-user {
+  justify-content: flex-end;
+}
+
+.chat-message-row-assistant {
+  justify-content: flex-start;
+}
+
+.chat-avatar {
+  width: 24px !important;
+  height: 24px !important;
+  border: 1px solid rgba(37, 99, 235, 0.28);
+}
+
+.chat-avatar .MuiSvgIcon-root {
+  font-size: 0.9rem;
+}
+
+.chat-avatar-user {
+  background: rgba(37, 99, 235, 0.2) !important;
+  color: #1d4ed8 !important;
+}
+
+.chat-avatar-bot {
+  background: rgba(5, 150, 105, 0.2) !important;
+  color: #047857 !important;
+}
+
+body.theme-dark .chat-avatar {
+  border-color: rgba(96, 165, 250, 0.42);
+}
+
+body.theme-dark .chat-avatar-user {
+  background: rgba(59, 130, 246, 0.34) !important;
+  color: #dbeafe !important;
+}
+
+body.theme-dark .chat-avatar-bot {
+  background: rgba(16, 185, 129, 0.3) !important;
+  color: #a7f3d0 !important;
+}
+
+.step-starter-card {
+  border-radius: 12px;
+  border: 1px solid var(--panel-border);
+  background: var(--panel-bg);
+  box-shadow: var(--shadow-soft);
+  padding: 8px;
+  animation: fadeUp 200ms ease-out;
+}
+
+.step-load-panel {
+  border-radius: 10px;
+  border: 1px dashed rgba(37, 99, 235, 0.35);
+  background: rgba(255, 255, 255, 0.7);
+  padding: 8px;
+}
+
+.inline-option-list {
+  max-height: 220px;
+  overflow: auto;
+  border: 1px solid var(--panel-border);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.62);
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.inline-option-item {
+  width: 100%;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  padding: 6px 8px;
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  text-align: left;
+  background: rgba(255, 255, 255, 0.7);
+  transition: border-color 140ms ease-out, background 140ms ease-out, transform 140ms ease-out;
+}
+
+.inline-option-item:hover {
+  border-color: rgba(37, 99, 235, 0.34);
+  background: rgba(219, 234, 254, 0.64);
+}
+
+.inline-option-item-selected {
+  border-color: rgba(37, 99, 235, 0.52);
+  background: rgba(219, 234, 254, 0.82);
+}
+
+.inline-option-icon {
+  margin-top: 1px;
+  color: #2563eb;
+}
+
+.inline-option-id {
+  font-weight: 700 !important;
+  color: var(--text-secondary);
+  margin-top: 2px;
+}
+
+.inline-option-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  white-space: normal;
+}
+
+body.theme-dark .inline-option-list {
+  background: rgba(2, 6, 23, 0.58);
+}
+
+body.theme-dark .inline-option-item {
+  background: rgba(15, 23, 42, 0.7);
+}
+
+body.theme-dark .inline-option-item:hover {
+  border-color: rgba(96, 165, 250, 0.52);
+  background: rgba(30, 64, 175, 0.35);
+}
+
+body.theme-dark .inline-option-item-selected {
+  border-color: rgba(96, 165, 250, 0.74);
+  background: rgba(30, 64, 175, 0.54);
+}
+
+body.theme-dark .inline-option-icon {
+  color: #93c5fd;
+}
+
+.step-action-bar {
+  border-radius: 12px;
+  border: 1px solid var(--panel-border);
+  background: var(--panel-bg);
+  box-shadow: var(--shadow-soft);
+  padding: 6px;
+}
+
+.step-send-row .MuiTextField-root,
+.chat-action-bar .MuiTextField-root {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.step-send-row .MuiButton-root,
+.chat-action-bar .MuiButton-root {
+  flex: 0 0 auto;
+}
+
+.step-tools-row {
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-bottom: 2px;
+}
+
+.chat-action-bar {
+  border-radius: 12px;
+  border: 1px solid var(--panel-border);
+  background: var(--panel-bg);
+  box-shadow: var(--shadow-soft);
+  padding: 6px;
+  align-items: center;
+}
+
+.sql-query-panel {
+  flex: 0 0 auto;
+  min-height: 280px;
+  border-radius: 12px;
+  border: 1px solid var(--panel-border);
+  background: var(--panel-bg);
+  box-shadow: var(--shadow-soft);
+  overflow: hidden;
+  min-width: 0;
+}
+
+.sql-grid-resizer {
+  min-height: 220px;
+  height: 320px;
+  max-height: 42vh;
+  resize: vertical;
+  overflow: hidden;
+  min-width: 0;
+}
+
+.sql-grid-resizer .MuiDataGrid-root {
+  height: 100%;
+  min-width: 100%;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.sql-grid-resizer .MuiDataGrid-main,
+.sql-grid-resizer .MuiDataGrid-virtualScroller {
+  overflow: auto !important;
+}
+
+.step-action-icon {
+  border: 1px solid rgba(37, 99, 235, 0.26) !important;
+  background: rgba(37, 99, 235, 0.08) !important;
+  color: #1d4ed8 !important;
+}
+
+.typing-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(37, 99, 235, 0.22);
+  padding: 3px 8px;
+  background: rgba(37, 99, 235, 0.07);
+}
+
+@keyframes fadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (max-width: 1024px) {
+  .app-layout {
+    flex-direction: column;
+    padding-bottom: 84px;
+  }
+
+  .side-nav {
+    width: 100%;
+    min-width: 100%;
+    max-width: 100%;
+    resize: none;
+  }
+
+  .workspace {
+    height: calc(100% - 120px);
+  }
+
+  .app-footer-mini {
+    min-height: 58px;
+    padding: 4px 6px;
+  }
+
+  .app-footer-mini-text {
+    font-size: inherit !important;
+  }
+
+  .app-footer-mini-link {
+    font-size: inherit;
+  }
+
+  .app-footer-mini-sep {
+    display: none;
+  }
+
+  .app-footer {
+    padding: 1px 3px;
+  }
+
+  .footer-main {
+    row-gap: 1px;
+    padding: 0;
+    text-align: center;
+    align-items: center;
+  }
+
+  .footer-legal-block {
+    flex: 1 1 100%;
+    max-width: 100%;
+    padding-right: 0;
+    align-items: center;
+  }
+
+  .footer-legal-line {
+    font-size: 0.17rem !important;
+  }
+
+  .footer-branding {
+    position: static;
+    justify-content: center;
+    padding: 0;
+  }
+
+  .footer-powered-by {
+    font-size: 0.19rem !important;
+  }
+
+  .dcai-logo {
+    height: 5px;
+  }
+}

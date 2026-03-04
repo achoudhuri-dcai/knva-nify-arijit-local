@@ -9,10 +9,11 @@ __*
 /Dash_App/user_in_progress_nifs
 /Dash_App/control_docs/~$Expert_System_Rules.xlsx
 /admin_feedback
-/vectorstore
 /user_in_progress_nifs
 /user_files
 /output
+/vectorstore
+/assets/doc_images_and_summaries
 /history
 /logs
 /.venv

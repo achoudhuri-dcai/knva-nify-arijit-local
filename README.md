@@ -64,6 +64,50 @@ Tuning environment variables:
 - `NIF_RAG_MAX_AUTO_STEPS` (default `10`)
 - `NIF_RAG_RETRIEVAL_TOP_K` (default `4`)
 
+## Parallel React UI
+
+A new React UI is available under `react-ui/` and runs in parallel to the existing Dash UI.
+
+Backend API routes exposed by Flask:
+- `GET /api/v1/health/live`
+- `GET /api/v1/me`
+- `POST /api/v1/session`
+- `GET /api/v1/modules`
+- `POST /api/v1/modules/select`
+- `POST /api/v1/chat/turn`
+- `GET /api/v1/nif/step/options`
+- `GET /api/v1/nif/saved`
+- `POST /api/v1/nif/new-session`
+- `POST /api/v1/nif/load-session`
+- `POST /api/v1/nif/save-session`
+- `POST /api/v1/nif/reload-config`
+- `POST /api/v1/nif/progress-preview`
+- `POST /api/v1/nif/download`
+
+React UI dev run:
+1. Start backend app:
+   - `DEBUG=false .venv/bin/python DCAI_KN_Chat_Dash_UI_Gradio_Mock.py`
+2. Start React app:
+   - `cd react-ui`
+   - `npm install`
+   - `npm run dev`
+
+CORS allow-list for React dev origins:
+- `REACT_UI_ALLOWED_ORIGINS=http://localhost:5173`
+
+Feature flag for enhanced NIF step starter/load flow in React:
+- `REACT_NIF_STEP_ENHANCED=true`
+
+## Vectorstore maintenance
+
+Clear all collections in the project vectorstore:
+
+`DEBUG=false .venv/bin/python lib/clear_vectorstore.py`
+
+Optional custom folder:
+
+`DEBUG=false .venv/bin/python lib/clear_vectorstore.py --folder /path/to/vectorstore`
+
 ## Offline RAG evaluation
 
 1. Create a dataset file from the sample:
