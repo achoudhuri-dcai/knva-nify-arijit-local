@@ -1051,6 +1051,10 @@ body.theme-dark .inline-option-icon {
   min-width: 0;
 }
 
+.sql-query-panel-collapsed {
+  min-height: 0;
+}
+
 .sql-grid-resizer {
   min-height: 220px;
   height: 320px;

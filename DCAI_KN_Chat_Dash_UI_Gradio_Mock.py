@@ -4090,6 +4090,7 @@ app.layout = dbc.Container(
                                                 "Show LLM Prompt",
                                                 id="show-nif-llm-prompt-button",
                                                 n_clicks=0,
+                                                disabled=True,
                                                 size="sm",
                                                 color="secondary",
                                                 style={"fontSize": "12px"},
@@ -5902,9 +5903,9 @@ def render_nif_query_table(nif_query_result, active_task_name):
     Input("active_task_name", "data"),
 )
 def toggle_nif_prompt_button(prompt_payload, active_task_name):
-    if active_task_name != "nif_database_task":
-        return True
-    return not isinstance(prompt_payload, dict)
+    # Prompt visibility is handled in the React UI.
+    # Keep Dash "Show Prompt" button disabled.
+    return True
 
 
 @app.callback(

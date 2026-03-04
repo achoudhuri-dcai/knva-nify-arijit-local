@@ -1,9 +1,16 @@
 import DownloadRoundedIcon from "@mui/icons-material/DownloadRounded";
 import FilterAltOutlinedIcon from "@mui/icons-material/FilterAltOutlined";
+import KeyboardArrowDownRoundedIcon from "@mui/icons-material/KeyboardArrowDownRounded";
+import KeyboardArrowUpRoundedIcon from "@mui/icons-material/KeyboardArrowUpRounded";
 import {
   Alert,
   Box,
   Button,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  IconButton,
   Paper,
   Stack,
   Tooltip,
@@ -24,6 +31,7 @@ import FilterBuilderDialog from "./FilterBuilderDialog";
 interface NifSearchQueryPanelProps {
   queryResult: Record<string, unknown> | null;
   responseMarkdown: string;
+  promptPayload: Record<string, unknown> | null;
 }
 
 interface QueryResultNormalized {
@@ -109,10 +117,16 @@ function normalizeQueryResult(
   };
 }
 
-export default function NifSearchQueryPanel({ queryResult, responseMarkdown }: NifSearchQueryPanelProps) {
+export default function NifSearchQueryPanel({
+  queryResult,
+  responseMarkdown,
+  promptPayload,
+}: NifSearchQueryPanelProps) {
   const [filterDialogOpen, setFilterDialogOpen] = useState(false);
+  const [promptDialogOpen, setPromptDialogOpen] = useState(false);
   const [filterState, setFilterState] = useState<FilterState>(EMPTY_FILTER_STATE);
   const [showSql, setShowSql] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
   const [paginationModel, setPaginationModel] = useState<GridPaginationModel>({
     page: 0,
     pageSize: 25,
@@ -122,6 +136,28 @@ export default function NifSearchQueryPanel({ queryResult, responseMarkdown }: N
     () => normalizeQueryResult(queryResult, responseMarkdown),
     [queryResult, responseMarkdown],
   );
+  const hasPromptPayload = Boolean(promptPayload && typeof promptPayload === "object");
+  const formattedPrompt = useMemo(() => {
+    if (!hasPromptPayload || !promptPayload) {
+      return "No prompt payload is available for this turn.";
+    }
+
+    const capturedAt = String(promptPayload.captured_at || "").trim();
+    const sessionId = String(promptPayload.session_id || "").trim();
+    const systemPrompt = String(promptPayload.system_prompt || "").trim() || "(System prompt not available for this run.)";
+    const userPrompt = String(promptPayload.user_prompt || "").trim() || "(User prompt was empty.)";
+
+    const headerLines: string[] = [];
+    if (capturedAt) {
+      headerLines.push(`Captured at: ${capturedAt}`);
+    }
+    if (sessionId) {
+      headerLines.push(`Session ID: ${sessionId}`);
+    }
+
+    const header = headerLines.length ? `${headerLines.join("\n")}\n\n` : "";
+    return `${header}=== SYSTEM PROMPT ===\n${systemPrompt}\n\n=== USER PROMPT ===\n${userPrompt}\n`;
+  }, [hasPromptPayload, promptPayload]);
 
   useEffect(() => {
     setFilterState(EMPTY_FILTER_STATE);
@@ -272,7 +308,7 @@ export default function NifSearchQueryPanel({ queryResult, responseMarkdown }: N
   }
 
   return (
-    <Paper className="sql-query-panel" elevation={0}>
+    <Paper className={`sql-query-panel ${collapsed ? "sql-query-panel-collapsed" : ""}`} elevation={0}>
       <Stack
         direction={{ xs: "column", sm: "row" }}
         justifyContent="space-between"
@@ -291,65 +327,93 @@ export default function NifSearchQueryPanel({ queryResult, responseMarkdown }: N
           </Typography>
         </Stack>
 
-        <Stack direction="row" spacing={1}>
-          <Tooltip
-            title={
-              filterState.conditions.length
-                ? `Filters (${filterState.conditions.length})`
-                : "Filters"
-            }
-          >
-            <span>
-              <Button
-                variant={filterState.conditions.length ? "contained" : "outlined"}
-                onClick={() => setFilterDialogOpen(true)}
-                disabled={!normalized.rows.length}
-                sx={{ minWidth: 40, width: 40, px: 0 }}
-                aria-label="Open filters"
+        <Stack direction="row" spacing={0.5} alignItems="center">
+          {!collapsed ? (
+            <>
+              <Tooltip
+                title={
+                  filterState.conditions.length
+                    ? `Filters (${filterState.conditions.length})`
+                    : "Filters"
+                }
               >
-                <FilterAltOutlinedIcon fontSize="small" />
-              </Button>
-            </span>
-          </Tooltip>
+                <span>
+                  <Button
+                    variant={filterState.conditions.length ? "contained" : "outlined"}
+                    onClick={() => setFilterDialogOpen(true)}
+                    disabled={!normalized.rows.length}
+                    sx={{ minWidth: 40, width: 40, px: 0 }}
+                    aria-label="Open filters"
+                  >
+                    <FilterAltOutlinedIcon fontSize="small" />
+                  </Button>
+                </span>
+              </Tooltip>
 
-          <Tooltip
-            title={
-              filterState.conditions.length
-                ? "Download filtered rows to Excel"
-                : "Download all rows to Excel"
-            }
-          >
-            <span>
+              <Tooltip
+                title={
+                  filterState.conditions.length
+                    ? "Download filtered rows to Excel"
+                    : "Download all rows to Excel"
+                }
+              >
+                <span>
+                  <Button
+                    variant="outlined"
+                    onClick={downloadExcel}
+                    disabled={!normalized.columns.length}
+                    sx={{ minWidth: 40, width: 40, px: 0 }}
+                    aria-label="Download Excel"
+                  >
+                    <DownloadRoundedIcon fontSize="small" />
+                  </Button>
+                </span>
+              </Tooltip>
+
               <Button
                 variant="outlined"
-                onClick={downloadExcel}
-                disabled={!normalized.columns.length}
-                sx={{ minWidth: 40, width: 40, px: 0 }}
-                aria-label="Download Excel"
+                size="small"
+                onClick={() => setShowSql((prev) => !prev)}
+                disabled={!normalized.sql}
               >
-                <DownloadRoundedIcon fontSize="small" />
+                {showSql ? "Hide SQL" : "Show SQL"}
               </Button>
-            </span>
-          </Tooltip>
 
-          <Button
-            variant="outlined"
-            size="small"
-            onClick={() => setShowSql((prev) => !prev)}
-            disabled={!normalized.sql}
-          >
-            {showSql ? "Hide SQL" : "Show SQL"}
-          </Button>
+              <Button
+                variant="outlined"
+                size="small"
+                onClick={() => setPromptDialogOpen(true)}
+                disabled={!hasPromptPayload}
+              >
+                Show Prompt
+              </Button>
+            </>
+          ) : null}
+
+          <Tooltip title={collapsed ? "Expand Output Data Explorer" : "Collapse Output Data Explorer"}>
+            <IconButton
+              size="small"
+              onClick={() => setCollapsed((prev) => !prev)}
+              aria-label={collapsed ? "Expand output data explorer" : "Collapse output data explorer"}
+              sx={{
+                border: "1px solid var(--panel-border)",
+                borderRadius: 1,
+                color: "text.secondary",
+              }}
+            >
+              {collapsed ? <KeyboardArrowDownRoundedIcon fontSize="small" /> : <KeyboardArrowUpRoundedIcon fontSize="small" />}
+            </IconButton>
+          </Tooltip>
         </Stack>
       </Stack>
 
-      {normalized.error ? (
+      {!collapsed && normalized.error ? (
         <Alert severity="warning" sx={{ mx: 1.2, mt: 1 }}>
           {normalized.error}
         </Alert>
       ) : null}
 
-      {showSql && normalized.sql ? (
+      {!collapsed && showSql && normalized.sql ? (
         <Box
           component="pre"
           sx={{
@@ -369,31 +433,33 @@ export default function NifSearchQueryPanel({ queryResult, responseMarkdown }: N
         </Box>
       ) : null}
 
-      <Box className="sql-grid-resizer" sx={{ px: 1.2, pb: 1.2, pt: 1 }}>
-        <DataGrid
-          rows={gridRows}
-          columns={gridColumns}
-          pagination
-          paginationModel={paginationModel}
-          onPaginationModelChange={setPaginationModel}
-          pageSizeOptions={[10, 25, 50, 100]}
-          disableRowSelectionOnClick
-          density="compact"
-          sx={{
-            width: "100%",
-            height: "100%",
-            maxWidth: "100%",
-            border: "1px solid rgba(15, 23, 42, 0.08)",
-            "& .MuiDataGrid-cell": {
-              borderColor: "rgba(15, 23, 42, 0.08)",
-            },
-            "& .MuiDataGrid-main, & .MuiDataGrid-virtualScroller, & .MuiDataGrid-virtualScrollerContent": {
-              overflowX: "auto !important",
-              overflowY: "auto !important",
-            },
-          }}
-        />
-      </Box>
+      {!collapsed ? (
+        <Box className="sql-grid-resizer" sx={{ px: 1.2, pb: 1.2, pt: 1 }}>
+          <DataGrid
+            rows={gridRows}
+            columns={gridColumns}
+            pagination
+            paginationModel={paginationModel}
+            onPaginationModelChange={setPaginationModel}
+            pageSizeOptions={[10, 25, 50, 100]}
+            disableRowSelectionOnClick
+            density="compact"
+            sx={{
+              width: "100%",
+              height: "100%",
+              maxWidth: "100%",
+              border: "1px solid rgba(15, 23, 42, 0.08)",
+              "& .MuiDataGrid-cell": {
+                borderColor: "rgba(15, 23, 42, 0.08)",
+              },
+              "& .MuiDataGrid-main, & .MuiDataGrid-virtualScroller, & .MuiDataGrid-virtualScrollerContent": {
+                overflowX: "auto !important",
+                overflowY: "auto !important",
+              },
+            }}
+          />
+        </Box>
+      ) : null}
 
       <FilterBuilderDialog
         open={filterDialogOpen}
@@ -410,6 +476,35 @@ export default function NifSearchQueryPanel({ queryResult, responseMarkdown }: N
           setFilterDialogOpen(false);
         }}
       />
+
+      <Dialog
+        open={promptDialogOpen}
+        onClose={() => setPromptDialogOpen(false)}
+        fullWidth
+        maxWidth="lg"
+      >
+        <DialogTitle>NIFDatabaseAgent Prompt</DialogTitle>
+        <DialogContent dividers sx={{ maxHeight: "70vh", overflowY: "auto" }}>
+          <Box
+            component="pre"
+            sx={{
+              m: 0,
+              whiteSpace: "pre-wrap",
+              wordBreak: "break-word",
+              fontSize: "12px",
+              lineHeight: 1.45,
+              fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
+            }}
+          >
+            {formattedPrompt}
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button variant="contained" onClick={() => setPromptDialogOpen(false)}>
+            Close
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Paper>
   );
 }

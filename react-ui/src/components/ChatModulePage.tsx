@@ -106,6 +106,7 @@ export default function ChatModulePage({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [searchQueryResult, setSearchQueryResult] = useState<Record<string, unknown> | null>(null);
+  const [searchPromptPayload, setSearchPromptPayload] = useState<Record<string, unknown> | null>(null);
   const [latestResponseMarkdown, setLatestResponseMarkdown] = useState("");
   const chatScrollRef = useRef<HTMLDivElement | null>(null);
 
@@ -137,6 +138,7 @@ export default function ChatModulePage({
       setBusy(true);
       setError(null);
       setSearchQueryResult(null);
+      setSearchPromptPayload(null);
       setLatestResponseMarkdown("");
       setMessages([]);
       try {
@@ -204,6 +206,7 @@ export default function ChatModulePage({
           nextMessages.push({ role: "assistant", content: turn.response_markdown || "" });
           if (module.key === "search") {
             setSearchQueryResult((turn.nif_query_result ?? null) as Record<string, unknown> | null);
+            setSearchPromptPayload((turn.nif_llm_prompt ?? null) as Record<string, unknown> | null);
             setLatestResponseMarkdown(turn.response_markdown || "");
           }
         }
@@ -266,6 +269,7 @@ export default function ChatModulePage({
       setMessages((prev) => [...prev, { role: "assistant", content: turn.response_markdown || "" }]);
       if (module.key === "search") {
         setSearchQueryResult((turn.nif_query_result ?? null) as Record<string, unknown> | null);
+        setSearchPromptPayload((turn.nif_llm_prompt ?? null) as Record<string, unknown> | null);
         setLatestResponseMarkdown(turn.response_markdown || "");
       }
     } catch (err) {
@@ -338,6 +342,7 @@ export default function ChatModulePage({
         <NifSearchQueryPanel
           queryResult={searchQueryResult}
           responseMarkdown={latestResponseMarkdown}
+          promptPayload={searchPromptPayload}
         />
       ) : null}
 
