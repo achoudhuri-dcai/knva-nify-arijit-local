@@ -4,16 +4,19 @@ import ChecklistRoundedIcon from "@mui/icons-material/ChecklistRounded";
 import QuizRoundedIcon from "@mui/icons-material/QuizRounded";
 import DarkModeRoundedIcon from "@mui/icons-material/DarkModeRounded";
 import LightModeRoundedIcon from "@mui/icons-material/LightModeRounded";
+import CloseRoundedIcon from "@mui/icons-material/CloseRounded";
+import ContactSupportRoundedIcon from "@mui/icons-material/ContactSupportRounded";
 import MenuOpenRoundedIcon from "@mui/icons-material/MenuOpenRounded";
 import MenuRoundedIcon from "@mui/icons-material/MenuRounded";
-import { Box, Button, IconButton, Paper, Stack, Tooltip, Typography } from "@mui/material";
-import { Navigate, NavLink, Route, Routes } from "react-router-dom";
+import { Box, Button, Drawer, IconButton, Paper, Stack, Tooltip, Typography } from "@mui/material";
+import { Navigate, NavLink, Route, Routes, useLocation } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
 
 import { createSession, fetchHealthLive } from "./api/client";
+import helpContentJson from "./config/help-content.json";
 import ChatModulePage from "./components/ChatModulePage";
 import NifStepSessionPage from "./components/NifStepSessionPage";
-import type { ModuleConfig } from "./types";
+import type { ModuleConfig, ModuleKey } from "./types";
 
 const MODULES: ModuleConfig[] = [
   {
@@ -49,7 +52,25 @@ const DCAI_HOME_URL = "https://www.demandchainai.com/";
 const TERMS_OF_USE_URL = "https://www.demandchainai.com/demandchain-home-page/dcai-terms-of-use-policy/";
 const LEGAL_FOOTER_TEXT = "This Chatbot can be used to query data from the Kellanova Nifty database. Always review the accuracy of the Chatbot responses as they may be incorrect. All content copyright ©2025 Demand Chain AI Inc. All rights reserved. No reproduction, transmission or display is permitted without the written permission of Demand Chain AI Inc.";
 
+interface HelpSection {
+  title: string;
+  points: string[];
+}
+
+interface HelpEntry {
+  purpose: string;
+  sections: HelpSection[];
+}
+
+const DEFAULT_HELP_ENTRY: HelpEntry = {
+  purpose: "Help content for this page is not configured yet.",
+  sections: [],
+};
+
+const HELP_CONTENT = helpContentJson as Partial<Record<ModuleKey, HelpEntry>>;
+
 export default function App() {
+  const location = useLocation();
   const [sessionId, setSessionId] = useState("");
   const [submitClicks, setSubmitClicks] = useState(0);
   const [nifProgressJson, setNifProgressJson] = useState('{"columns":[],"index":[0],"data":[[]]}');
@@ -58,10 +79,16 @@ export default function App() {
     window.localStorage.getItem(LLM_HEADER_KEY) || "LLM: loading"
   ));
   const [isNavExpanded, setIsNavExpanded] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState<boolean>(() => {
     const stored = window.localStorage.getItem(THEME_KEY);
     return stored === "dark";
   });
+  const activeModule = useMemo(
+    () => MODULES.find((module) => location.pathname === module.path || location.pathname.startsWith(`${module.path}/`)) || MODULES[0],
+    [location.pathname],
+  );
+  const activeHelp = HELP_CONTENT[activeModule.key] ?? DEFAULT_HELP_ENTRY;
 
   useEffect(() => {
     let cancelled = false;
@@ -247,16 +274,18 @@ export default function App() {
             </Box>
           </Stack>
           <Box className="side-nav-theme-slot">
-            <Tooltip title={isDarkMode ? "Switch to day mode" : "Switch to dark mode"}>
-              <IconButton
-                size="small"
-                className="theme-toggle-btn side-nav-theme-btn"
-                onClick={() => setIsDarkMode((prev) => !prev)}
-                aria-label={isDarkMode ? "Switch to day mode" : "Switch to dark mode"}
-              >
-                {isDarkMode ? <LightModeRoundedIcon fontSize="small" /> : <DarkModeRoundedIcon fontSize="small" />}
-              </IconButton>
-            </Tooltip>
+            <Stack className="side-nav-utility-stack" spacing={0.8}>
+              <Tooltip title={isDarkMode ? "Switch to day mode" : "Switch to dark mode"}>
+                <IconButton
+                  size="small"
+                  className="theme-toggle-btn side-nav-theme-btn"
+                  onClick={() => setIsDarkMode((prev) => !prev)}
+                  aria-label={isDarkMode ? "Switch to day mode" : "Switch to dark mode"}
+                >
+                  {isDarkMode ? <LightModeRoundedIcon fontSize="small" /> : <DarkModeRoundedIcon fontSize="small" />}
+                </IconButton>
+              </Tooltip>
+            </Stack>
           </Box>
         </Paper>
 
@@ -290,7 +319,68 @@ export default function App() {
             Terms of Use Policy
           </Typography>
         </Stack>
+        <Tooltip title={`Help: ${activeModule.label}`}>
+          <IconButton
+            size="small"
+            className="footer-help-btn"
+            onClick={() => setHelpOpen(true)}
+            aria-label="Open help"
+          >
+            <ContactSupportRoundedIcon fontSize="small" />
+          </IconButton>
+        </Tooltip>
       </Paper>
+
+      <Drawer
+        anchor="right"
+        open={helpOpen}
+        onClose={() => setHelpOpen(false)}
+        PaperProps={{ className: "help-drawer-paper" }}
+      >
+        <Stack direction="row" alignItems="center" justifyContent="space-between" className="help-drawer-header">
+          <Stack spacing={0.2}>
+            <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+              {`Help: ${activeModule.label}`}
+            </Typography>
+            <Typography variant="caption" color="text.secondary">
+              User Guide
+            </Typography>
+          </Stack>
+          <Tooltip title="Close help">
+            <IconButton size="small" onClick={() => setHelpOpen(false)} aria-label="Close help panel">
+              <CloseRoundedIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+        </Stack>
+
+        <Box className="help-drawer-body">
+          <Stack spacing={1.4}>
+            <Stack spacing={0.4}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+                Purpose
+              </Typography>
+              <Typography variant="body2">
+                {activeHelp.purpose}
+              </Typography>
+            </Stack>
+
+            {activeHelp.sections.map((section) => (
+              <Stack key={section.title} spacing={0.4} className="help-drawer-section">
+                <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+                  {section.title}
+                </Typography>
+                <Box component="ul" sx={{ m: 0, pl: 2.5 }}>
+                  {section.points.map((point) => (
+                    <Typography key={point} component="li" variant="body2" sx={{ mb: 0.25 }}>
+                      {point}
+                    </Typography>
+                  ))}
+                </Box>
+              </Stack>
+            ))}
+          </Stack>
+        </Box>
+      </Drawer>
     </Box>
   );
 }

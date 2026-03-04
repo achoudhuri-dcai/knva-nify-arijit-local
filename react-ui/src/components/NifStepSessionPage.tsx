@@ -197,6 +197,7 @@ export default function NifStepSessionPage({
   const [inlineOptionFilter, setInlineOptionFilter] = useState("");
 
   const isAnyBusy = busy || actionBusy;
+  const canTypeInChat = !showStarter;
   const loadDisabled = useMemo(
     () => isAnyBusy || !selectedFile || savedFiles.length === 0,
     [isAnyBusy, selectedFile, savedFiles.length],
@@ -668,7 +669,7 @@ export default function NifStepSessionPage({
         <Box className="chat-scroll" ref={chatScrollRef}>
           {messages.length === 0 ? (
             <Typography variant="body2" color="text.secondary">
-              NIFTY is ready. Enter your next NIF step question.
+              NIF Form creation module is ready! Choose between New Form (NIF) Chat session OR Load Saved Forms from previous chat
             </Typography>
           ) : null}
 
@@ -790,10 +791,10 @@ export default function NifStepSessionPage({
           <TextField
             fullWidth
             size="small"
-            placeholder="Type your message"
+            placeholder={canTypeInChat ? "Type your message" : "Choose New NIF chat session or Load NIF from previous chat to begin"}
             value={input}
             onChange={(event) => setInput(event.target.value)}
-            disabled={isAnyBusy}
+            disabled={isAnyBusy || !canTypeInChat}
             onKeyDown={(event) => {
               if (event.key === "Enter" && !event.shiftKey) {
                 event.preventDefault();
@@ -806,7 +807,7 @@ export default function NifStepSessionPage({
             variant="contained"
             endIcon={busy ? <CircularProgress size={14} color="inherit" /> : <SendRoundedIcon />}
             onClick={() => void onSubmit()}
-            disabled={isAnyBusy || !input.trim()}
+            disabled={isAnyBusy || !canTypeInChat || !input.trim()}
           >
             Send
           </Button>

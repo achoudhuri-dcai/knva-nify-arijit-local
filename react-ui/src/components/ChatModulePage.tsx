@@ -12,6 +12,8 @@ import NifSearchQueryPanel from "./NifSearchQueryPanel";
 import type { ChatMessage, ModuleConfig } from "../types";
 
 const TRAINING_SUMMARY_QUESTION = "What training resources are available for NIF and what are the key topics they cover?";
+const FIELD_MODULE_UNAVAILABLE_BACKEND = "NIF Field module is not yet available.";
+const FIELD_MODULE_UNAVAILABLE_UI = "Sorry! this module is not available at this time .. ";
 
 interface ChatModulePageProps {
   module: ModuleConfig;
@@ -112,10 +114,21 @@ export default function ChatModulePage({
       return "Tip: type 'Start a new NIF with field LIM' to begin the step flow quickly.";
     }
     if (module.key === "field") {
-      return "This follows current backend behavior for NIF Field question.";
+      return "NIF Field question module is under development. Message input is currently disabled.";
     }
     return "";
   }, [module.key]);
+
+  function normalizeModuleMessage(text: string): string {
+    const raw = String(text || "").trim();
+    if (!raw) {
+      return "";
+    }
+    if (module.key === "field" && raw === FIELD_MODULE_UNAVAILABLE_BACKEND) {
+      return FIELD_MODULE_UNAVAILABLE_UI;
+    }
+    return raw;
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -170,7 +183,7 @@ export default function ChatModulePage({
         }
 
         if (selected.simple_message?.trim()) {
-          nextMessages.push({ role: "system", content: selected.simple_message.trim() });
+          nextMessages.push({ role: "system", content: normalizeModuleMessage(selected.simple_message) });
         }
 
         if (selected.auto_submit && selected.human_chat_value?.trim()) {
@@ -226,7 +239,7 @@ export default function ChatModulePage({
   }, [messages, busy]);
 
   async function onSubmit() {
-    if (!input.trim() || busy) {
+    if (module.key === "field" || !input.trim() || busy) {
       return;
     }
 
@@ -332,9 +345,10 @@ export default function ChatModulePage({
         <TextField
           fullWidth
           size="small"
-          placeholder="Type your message"
+          placeholder={module.key === "field" ? "NIF Field question module is under development" : "Type your message"}
           value={input}
           onChange={(event) => setInput(event.target.value)}
+          disabled={module.key === "field"}
           onKeyDown={(event) => {
             if (event.key === "Enter" && !event.shiftKey) {
               event.preventDefault();
@@ -342,7 +356,12 @@ export default function ChatModulePage({
             }
           }}
         />
-        <Button variant="contained" endIcon={busy ? <CircularProgress size={14} color="inherit" /> : <SendRoundedIcon />} onClick={() => void onSubmit()} disabled={busy || !input.trim()}>
+        <Button
+          variant="contained"
+          endIcon={busy ? <CircularProgress size={14} color="inherit" /> : <SendRoundedIcon />}
+          onClick={() => void onSubmit()}
+          disabled={module.key === "field" || busy || !input.trim()}
+        >
           Send
         </Button>
       </Stack>

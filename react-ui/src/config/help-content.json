@@ -1,0 +1,113 @@
+{
+  "training": {
+    "purpose": "Use this page to ask questions about NIF training manuals and get grounded answers based on training resources and key topic summaries.",
+    "sections": [
+      {
+        "title": "How This Page Starts",
+        "points": [
+          "When you open this page, the app can auto-submit a starter training question to fetch a baseline summary.",
+          "The conversation area then shows the user question and the assistant answer."
+        ]
+      },
+      {
+        "title": "How To Ask Follow-up Questions",
+        "points": [
+          "Type a question in the message box and click Send, or press Enter.",
+          "Ask specific follow-ups such as topic scope, coverage gaps, owner teams, or process steps."
+        ]
+      },
+      {
+        "title": "How To Read The Response",
+        "points": [
+          "Assistant output supports structured formatting such as bullets, emphasis, and links.",
+          "Use links in the answer to jump to related references where available."
+        ]
+      }
+    ]
+  },
+  "step": {
+    "purpose": "Use this page to create, continue, and complete a NIF step-by-step session while preserving progress between chats.",
+    "sections": [
+      {
+        "title": "Session Start Options",
+        "points": [
+          "New NIF chat session starts a fresh guided flow.",
+          "Load NIF from previous chat opens saved files so you can resume from prior progress."
+        ]
+      },
+      {
+        "title": "Responding To Guided Questions",
+        "points": [
+          "You can type answers in the chat box and click Send.",
+          "For choice-based questions, use the in-chat option selector cards. Select one or more options when applicable and click Submit option(s).",
+          "Use the search box above option cards to quickly find choices in large lists."
+        ]
+      },
+      {
+        "title": "Action Icons Below Chat",
+        "points": [
+          "Save NIF progress opens a dialog to save the current in-progress NIF file.",
+          "Show progress opens a detailed progress grid for the active NIF state.",
+          "Reload NIF rules refreshes step-by-step runtime rules from source files.",
+          "Download file exports current NIF progress to a CSV file.",
+          "Refresh page resets page state and reloads available actions/files."
+        ]
+      }
+    ]
+  },
+  "search": {
+    "purpose": "Use this page to ask natural-language database questions and analyze result sets in the Output Data Explorer grid.",
+    "sections": [
+      {
+        "title": "Running A Search",
+        "points": [
+          "Enter a business question and click Send.",
+          "The assistant returns the answer summary, and the Output Data Explorer shows query rows in tabular form."
+        ]
+      },
+      {
+        "title": "Output Data Explorer",
+        "points": [
+          "Rows count reflects filtered rows when filters are active.",
+          "The grid supports scrolling and pagination for large outputs."
+        ]
+      },
+      {
+        "title": "Filter Icon",
+        "points": [
+          "Click the filter icon to open advanced filtering.",
+          "Choose whether conditions are combined with AND or OR.",
+          "Add one or more conditions by selecting a column, operator, and value(s).",
+          "Use text, numeric, or date operators based on column type.",
+          "Apply saves active filters; Clear removes all filters."
+        ]
+      },
+      {
+        "title": "Download And SQL Controls",
+        "points": [
+          "Excel download icon exports filtered rows when filters are active; otherwise it exports all visible rows.",
+          "Show SQL/Hide SQL toggles the generated SQL statement display."
+        ]
+      }
+    ]
+  },
+  "field": {
+    "purpose": "Sorry! This module is not available at this time",
+    "sections": [
+      {
+        "title": "How To Use",
+        "points": [
+          "Type a field-related question and click Send.",
+          "Ask for definitions, dependencies, data-entry expectations, or examples."
+        ]
+      },
+      {
+        "title": "Response Guidance",
+        "points": [
+          "Use follow-up questions to narrow by region, process stage, or exception handling.",
+          "If output is broad, ask for step-by-step clarification for the specific field."
+        ]
+      }
+    ]
+  }
+}
