@@ -2828,6 +2828,72 @@ def normalize_nif_sql_query(sql_query: str) -> str:
     return sql_query_clean
 
 
+def _extract_requested_row_count_from_user_query(user_query: str) -> Optional[int]:
+    text = str(user_query or "").strip().lower()
+    if not text:
+        return None
+
+    patterns = [
+        r"\btop\s+(\d+)\b",
+        r"\bfirst\s+(\d+)\b",
+        r"\blast\s+(\d+)\b",
+        r"\blatest\s+(\d+)\b",
+        r"\bmost\s+recent\s+(\d+)\b",
+        r"\bshow\s+me\s+(\d+)\b",
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, text, flags=re.IGNORECASE)
+        if match:
+            try:
+                return int(match.group(1))
+            except Exception:
+                return None
+    return None
+
+
+def _looks_like_aggregate_sql(sql_query: str) -> bool:
+    text = str(sql_query or "").lower()
+    if not text:
+        return False
+    return bool(re.search(r"\b(count|avg|sum|min|max)\s*\(", text))
+
+
+def enforce_search_result_min_limit(
+    sql_query: str,
+    user_query: str,
+    min_limit: int = 25,
+) -> str:
+    """
+    Ensure list-style Search NIF queries return at least min_limit rows
+    unless user explicitly requested fewer.
+    """
+    sql_clean = normalize_nif_sql_query(sql_query)
+    if not sql_clean:
+        return sql_clean
+
+    min_limit = max(1, int(min_limit or 25))
+    explicit_rows = _extract_requested_row_count_from_user_query(user_query)
+    if isinstance(explicit_rows, int) and explicit_rows > 0 and explicit_rows < min_limit:
+        return sql_clean
+
+    if _looks_like_aggregate_sql(sql_clean):
+        return sql_clean
+
+    limit_pattern = re.compile(r"(?is)\bLIMIT\s+(\d+)\b(?![\s\S]*\bLIMIT\b)")
+    limit_match = limit_pattern.search(sql_clean)
+    if limit_match:
+        try:
+            current_limit = int(limit_match.group(1))
+        except Exception:
+            current_limit = min_limit
+        if current_limit < min_limit:
+            sql_clean = limit_pattern.sub(f"LIMIT {min_limit}", sql_clean, count=1)
+        return sql_clean
+
+    sql_no_semicolon = sql_clean.rstrip().rstrip(";")
+    return f"{sql_no_semicolon}\nLIMIT {min_limit}"
+
+
 def execute_nif_select_query(sql_query: str, max_rows: int | None = None) -> dict:
     """
     Execute read-only SQL on NIFS database and return structured result.
@@ -2954,6 +3020,99 @@ def format_nif_query_result_for_llm(
             )
 
     return output.strip()
+
+
+_NIF_LIST_OUTPUT_COLUMNS = [
+    "Status Name",
+    "Created By",
+    "Created",
+    "LIM",
+    "Material Number",
+    "Brief Material Description",
+    "Title",
+]
+
+
+def _norm_col(name: str) -> str:
+    return re.sub(r"[^a-z0-9]", "", str(name or "").strip().lower())
+
+
+def _get_row_val(row: dict, candidates: list[str]):
+    if not isinstance(row, dict):
+        return ""
+    lookup = {_norm_col(k): k for k in row.keys()}
+    for candidate in candidates:
+        key = lookup.get(_norm_col(candidate))
+        if key is not None:
+            val = row.get(key)
+            return "" if val is None else val
+    return ""
+
+
+def _is_aggregate_result_payload(result: dict) -> bool:
+    if not isinstance(result, dict):
+        return False
+    columns = [str(c or "") for c in (result.get("columns") or [])]
+    if not columns:
+        return False
+    cols_norm = [_norm_col(c) for c in columns]
+    agg_tokens = ("count", "avg", "sum", "min", "max")
+    return all(any(tok in col for tok in agg_tokens) for col in cols_norm)
+
+
+def _is_list_intent_query(user_query: str) -> bool:
+    text = str(user_query or "").strip().lower()
+    if not text:
+        return False
+    signals = [
+        "list",
+        "show me",
+        "show all",
+        "all nifs",
+        "all records",
+        "records",
+        "rows",
+        "full list",
+        "display",
+    ]
+    return any(sig in text for sig in signals)
+
+
+def _reshape_search_output_for_list(result: dict, limit_rows: int = 25) -> dict:
+    """
+    Force canonical Search NIF list columns and attach hyperlink target for Title.
+    """
+    if not isinstance(result, dict):
+        return result
+
+    rows = list(result.get("rows") or [])[:max(1, int(limit_rows or 25))]
+    reshaped_rows = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        href = _get_row_val(row, ["Link", "PDF Link", "PDF_Link", "NIF Link"])
+        reshaped_rows.append(
+            {
+                "Status Name": _get_row_val(row, ["Status_Name", "Status Name", "Status"]),
+                "Created By": _get_row_val(row, ["Created_By", "Created By", "REQUESTOR"]),
+                "Created": _get_row_val(row, ["Created"]),
+                "LIM": _get_row_val(row, ["LIM"]),
+                "Material Number": _get_row_val(row, ["Material_Number", "Material Number"]),
+                "Brief Material Description": _get_row_val(
+                    row,
+                    ["Brief Material Description", "Material_Description", "Material Description"],
+                ),
+                "Title": _get_row_val(row, ["Title"]),
+                "_nif_href": href,
+            }
+        )
+
+    updated = dict(result)
+    updated["columns"] = list(_NIF_LIST_OUTPUT_COLUMNS)
+    updated["rows"] = reshaped_rows
+    updated["displayed_row_count"] = len(reshaped_rows)
+    updated["truncated"] = int(result.get("row_count", 0) or 0) > len(reshaped_rows)
+    return updated
 
 class query_nif_db_tool_2(lr.agent.ToolMessage):
     """
@@ -3362,6 +3521,14 @@ def build_nif_database_system_message(
 
         SQL rules:
         - Wrap column names in double quotes.
+        - Approval-date mapping (MANDATORY):
+          - For prompts containing "approval date", "approved date", "approved on",
+            "approval end", or equivalent approval-date intent, use column
+            "MFA_End" as the primary date field.
+          - MFA = Master Files Approval.
+          - "MFA_End" corresponds to Master Files Approval End.
+          - Do not default those prompts to "MF_Approval_Start_Date" unless the
+            user explicitly asks for approval start date.
         - Text match guidance:
           - For text comparisons in WHERE, use wildcard contains search:
             LIKE '%value%'.
@@ -3375,6 +3542,12 @@ def build_nif_database_system_message(
             Example:
             LOWER(COALESCE("Created_By", '')) LIKE '%marie%'
             AND LOWER(COALESCE("Created_By", '')) LIKE '%smith%'
+          - Disambiguation rule (MANDATORY):
+            - Phrases like "created by month", "created by year", "by month and year",
+              "created per month", "created per year" refer to the date column "Created"
+              and require date grouping (strftime), NOT the person column "Created_By".
+            - Use "Created_By" only when the prompt clearly asks for creator/requestor
+              person identity.
 
         - Abbreviation guidance:
           - For abbreviation predicates, use UPPER() and token-space pattern only:
@@ -3397,6 +3570,11 @@ def build_nif_database_system_message(
             AND date(<date_col>) < date('YYYY-MM-DD')
           - For quarter/month/year grouping use strftime('%Y', ...),
             strftime('%m', ...), and month arithmetic.
+          - For "count by month and year" use:
+            strftime('%Y', date("Created")) AS year,
+            strftime('%m', date("Created")) AS month,
+            COUNT(*) AS nif_count,
+            then GROUP BY year, month and ORDER BY year, month.
           - If the question has no clear date expression, avoid assuming a
             date filter.
           - Support date range filters for past/future, multiple
@@ -3404,7 +3582,7 @@ def build_nif_database_system_message(
             next 2 quarters).
           - Temporal columns (5, as provided):
             NIFS.Created, NIFS.Created_By, NIFS.First_Ship_Date,
-            NIFS.MF_Approval_Start_Date, NIFS.Modified.
+            NIFS.MFA_End, NIFS.Modified.
           - IMPORTANT: NIFS.Created_By is a person-name field for tokenized text
             matching, not date math.
 
@@ -3420,6 +3598,12 @@ def build_nif_database_system_message(
           - Allowed SQLite functions only:
             ABS, AVG, CAST, COALESCE, COUNT, DATE, DATETIME, JULIANDAY, LOWER,
             MAX, MIN, NULLIF, ROUND, STRFTIME, SUM, TIME, UPPER.
+          - GROUP BY sort default (MANDATORY):
+            - For queries that use GROUP BY, include ORDER BY.
+            - Default ORDER BY direction must be DESC unless the user explicitly
+              asks for ascending/increasing/oldest/lowest-first ordering.
+            - For time-grouped outputs (month/year), default to latest periods
+              first (ORDER BY year DESC, month DESC) unless prompt says otherwise.
           - Allowed date-shift units: day, week, month, quarter, year.
           - Quarter shift = 3 months.
           - SQLite date-shift forms:
@@ -3975,6 +4159,7 @@ app.layout = dbc.Container(
     dcc.Store(id='nif_query_result_store'),
     dcc.Store(id='nif_llm_prompt_store'),
     dcc.Download(id='download-nif-data'),
+    dcc.Download(id='download-nif-query-csv-data'),
 
     # Interval component pings to keep connection alive
     dcc.Interval(
@@ -4199,6 +4384,20 @@ app.layout = dbc.Container(
                             dbc.Spinner(children=[
                                 dcc.Markdown(id="results-markdown",),
                             ], size="md", color="#000000", fullscreen=False),   # End of Spinner
+                            html.Div(
+                                id="download-nif-query-csv-container",
+                                style={"display": "none", "marginTop": "8px", "marginBottom": "8px"},
+                                children=[
+                                    dbc.Button(
+                                        "Download Query CSV",
+                                        id="download-nif-query-csv-button",
+                                        n_clicks=0,
+                                        size="sm",
+                                        color="primary",
+                                        style={"fontSize": "12px"},
+                                    ),
+                                ],
+                            ),
                             html.Div(
                                 id="nif-query-output-container",
                                 style={"display": "none", "marginTop": "12px"},
@@ -5911,7 +6110,17 @@ def chat_bot(n_sub, human_chat_value, user_data, sid, user_nif_progress_json, ac
                 and not nif_query_result_data.get("error")
                 and int(nif_query_result_data.get("row_count", 0) or 0) == 0
             ):
-                full_response = "There are 0 records for that query."
+                full_response = (
+                    "0 records were generated for this query.\n\n"
+                    "Context:\n"
+                    "- The query executed successfully, but no rows matched the current filters.\n"
+                    "- This usually means one or more filter values (status/date/name/title/description) are too restrictive "
+                    "or mapped to a different field than expected.\n\n"
+                    "Try:\n"
+                    "1. Broadening date ranges or removing one filter.\n"
+                    "2. Using partial text (for example, part of a title or name).\n"
+                    "3. Asking for a simpler check first (for example, \"How many records match ...\")."
+                )
 
             if NIF_DB_SHOW_SQL_TRACE:
                 trace_sections = []
@@ -6018,41 +6227,66 @@ def chat_bot(n_sub, human_chat_value, user_data, sid, user_nif_progress_json, ac
     Input("active_task_name", "data"),
 )
 def render_nif_query_table(nif_query_result, active_task_name):
-    if not NIF_DB_ENHANCED_OUTPUT:
-        return {"display": "none"}, "", [], []
+    # Product decision: hide "NIFDatabaseAgent Query Output" section from Dash UI.
+    # Keep callback outputs intact for compatibility with existing component ids.
+    return {"display": "none"}, "", [], []
+
+
+@app.callback(
+    Output("download-nif-query-csv-container", "style"),
+    Input("nif_query_result_store", "data"),
+    Input("active_task_name", "data"),
+)
+def toggle_download_nif_query_csv_button(nif_query_result, active_task_name):
+    if active_task_name != "nif_database_task":
+        return {"display": "none"}
+    if not isinstance(nif_query_result, dict):
+        return {"display": "none"}
+    if nif_query_result.get("error"):
+        return {"display": "none"}
+    row_count = int(nif_query_result.get("row_count", 0) or 0)
+    if row_count <= 0:
+        return {"display": "none"}
+    return {"display": "block", "marginTop": "8px", "marginBottom": "8px"}
+
+
+@app.callback(
+    Output("download-nif-query-csv-data", "data"),
+    Input("download-nif-query-csv-button", "n_clicks"),
+    State("nif_query_result_store", "data"),
+    State("active_task_name", "data"),
+    prevent_initial_call=True,
+)
+def download_nif_query_csv(n_clicks, nif_query_result, active_task_name):
+    if not n_clicks:
+        raise dash.exceptions.PreventUpdate
 
     if active_task_name != "nif_database_task":
-        return {"display": "none"}, "", [], []
+        raise dash.exceptions.PreventUpdate
 
-    if not nif_query_result or not isinstance(nif_query_result, dict):
-        return {"display": "none"}, "", [], []
+    if not isinstance(nif_query_result, dict):
+        raise dash.exceptions.PreventUpdate
 
-    sql = str(nif_query_result.get("sql", "") or "").strip()
-    row_count = int(nif_query_result.get("row_count", 0) or 0)
-    displayed_row_count = int(nif_query_result.get("displayed_row_count", 0) or 0)
-    truncated = bool(nif_query_result.get("truncated", False))
-    error = nif_query_result.get("error")
+    if nif_query_result.get("error"):
+        raise dash.exceptions.PreventUpdate
 
-    columns = nif_query_result.get("columns", []) or []
     rows = nif_query_result.get("rows", []) or []
+    columns = nif_query_result.get("columns", []) or []
+    if not rows and not columns:
+        raise dash.exceptions.PreventUpdate
 
-    if not columns and rows:
-        columns = list(rows[0].keys())
-
-    dash_columns = [{"name": col, "id": col} for col in columns]
-
-    summary_parts = []
-    if sql:
-        summary_parts.append("SQL captured")
+    if rows:
+        df = pd.DataFrame(rows)
+        if columns:
+            ordered_cols = [col for col in columns if col in df.columns]
+            remaining_cols = [col for col in df.columns if col not in ordered_cols]
+            df = df[ordered_cols + remaining_cols]
     else:
-        summary_parts.append("No SQL captured")
-    summary_parts.append(f"Rows returned: {row_count}")
-    if truncated:
-        summary_parts.append(f"Showing first {displayed_row_count} rows")
-    if error:
-        summary_parts.append(f"Error: {error}")
+        df = pd.DataFrame(columns=[str(col) for col in columns])
 
-    return {"display": "block", "marginTop": "12px"}, " | ".join(summary_parts), dash_columns, rows
+    timestamp = dt.datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"nif_query_results_{timestamp}.csv"
+    return dcc.send_data_frame(df.to_csv, filename, index=False)
 
 
 @app.callback(

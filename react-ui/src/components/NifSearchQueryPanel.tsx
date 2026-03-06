@@ -11,6 +11,7 @@ import {
   DialogContent,
   DialogTitle,
   IconButton,
+  Link,
   Paper,
   Stack,
   Tooltip,
@@ -85,6 +86,13 @@ function createExportFilename(hasFilters: boolean): string {
   const pad = (n: number) => String(n).padStart(2, "0");
   const stamp = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
   return `nif_output_data_explorer_${hasFilters ? "filtered" : "all"}_${stamp}.xlsx`;
+}
+
+function createCsvFilename(hasFilters: boolean): string {
+  const now = new Date();
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const stamp = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+  return `nif_query_results_${hasFilters ? "filtered" : "all"}_${stamp}.csv`;
 }
 
 function normalizeQueryResult(
@@ -251,6 +259,16 @@ export default function NifSearchQueryPanel({
         },
         renderCell: (params) => {
           const cellText = String(params.value ?? "");
+          const rowLink =
+            String((params.row?.["Link"] as string | undefined) ?? "") ||
+            String((params.row?.["_nif_href"] as string | undefined) ?? "");
+          const hrefCandidate =
+            column === "Title"
+              ? rowLink
+              : /^https?:\/\//i.test(cellText)
+                ? cellText
+                : "";
+          const hasHref = /^https?:\/\//i.test(hrefCandidate);
           return (
             <Box
               sx={{
@@ -260,7 +278,13 @@ export default function NifSearchQueryPanel({
                 py: 0.5,
               }}
             >
-              {cellText}
+              {hasHref ? (
+                <Link href={hrefCandidate} target="_blank" rel="noreferrer">
+                  {cellText || hrefCandidate}
+                </Link>
+              ) : (
+                cellText
+              )}
             </Box>
           );
         },
@@ -315,6 +339,35 @@ export default function NifSearchQueryPanel({
     URL.revokeObjectURL(url);
   }
 
+  function downloadCsv(): void {
+    if (!normalized.columns.length) {
+      return;
+    }
+    const header = normalized.columns;
+    const csvEscape = (value: unknown): string => {
+      const text = String(toExportCell(value) ?? "");
+      if (/[",\n]/.test(text)) {
+        return `"${text.replace(/"/g, '""')}"`;
+      }
+      return text;
+    };
+    const lines: string[] = [];
+    lines.push(header.map(csvEscape).join(","));
+    for (const row of filteredRows) {
+      const values = header.map((col) => csvEscape(row[col]));
+      lines.push(values.join(","));
+    }
+    const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = createCsvFilename(filterState.conditions.length > 0);
+    document.body.appendChild(anchor);
+    anchor.click();
+    document.body.removeChild(anchor);
+    URL.revokeObjectURL(url);
+  }
+
   const shouldRenderPanel = Boolean(
     normalized.rows.length || normalized.sql || normalized.error,
   );
@@ -339,6 +392,18 @@ export default function NifSearchQueryPanel({
             Rows: {filteredRows.length}
             {filterState.conditions.length ? ` (filtered from ${normalized.rows.length})` : ""}
             {normalized.truncated ? ` | Showing first ${normalized.displayedRowCount} of ${normalized.rowCount}` : ""}
+          </Typography>
+          <Typography variant="caption" color="text.secondary">
+            <Link
+              href="#"
+              onClick={(event) => {
+                event.preventDefault();
+                downloadCsv();
+              }}
+              underline="hover"
+            >
+              Download results as CSV
+            </Link>
           </Typography>
         </Stack>
 
