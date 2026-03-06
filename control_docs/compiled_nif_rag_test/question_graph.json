@@ -107,7 +107,7 @@
     {
       "question_id": "RX_DTC_Q",
       "order": 17,
-      "question": "(no question)",
+      "question": "",
       "dropdown_refs": []
     },
     {
@@ -147,7 +147,7 @@
       "dropdown_refs": []
     },
     {
-      "question_id": "END_COUNTRY_Q",
+      "question_id": "FINISH_COUNTRY_Q",
       "order": 24,
       "question": "",
       "dropdown_refs": []
@@ -165,32 +165,38 @@
       "dropdown_refs": []
     },
     {
-      "question_id": "PROJECT_TYPE_Q",
+      "question_id": "SAP_MATL_NUM_Q",
       "order": 27,
-      "question": "What type of Project: PDR, PWR, SCR, KUBIC?",
+      "question": "",
       "dropdown_refs": []
     },
     {
-      "question_id": "PWR_Q",
+      "question_id": "PROJECT_TYPE_Q",
       "order": 28,
-      "question": "Enter a numeric Project Number (only numbers and dash allowed)",
+      "question": "What type of Project: PDR, PWR, SCR, or KUBIC?",
       "dropdown_refs": []
     },
     {
       "question_id": "PROJECT_NAME_Q",
       "order": 29,
-      "question": "Enter Project Name (only letters, numbers, and dash allowed)",
+      "question": "Enter Project Name (only letters, numbers, spaces, and dash allowed)",
       "dropdown_refs": []
     },
     {
-      "question_id": "END_PROJ_TYPE_Q",
+      "question_id": "PWR_Q",
       "order": 30,
+      "question": "Enter a numeric Project Number (only numbers and dash allowed)",
+      "dropdown_refs": []
+    },
+    {
+      "question_id": "FINISH_PROJ_TYPE_Q",
+      "order": 31,
       "question": "",
       "dropdown_refs": []
     },
     {
       "question_id": "SET_CATEGORY_Q",
-      "order": 31,
+      "order": 32,
       "question": "Select the category.",
       "dropdown_refs": [
         "RDL_CATEGORIES"
@@ -198,79 +204,79 @@
     },
     {
       "question_id": "BRIEF_PROD_DESC_Q",
-      "order": 32,
+      "order": 33,
       "question": "Enter a brief product description (max 40 chars)",
       "dropdown_refs": []
     },
     {
       "question_id": "BRIEF_PROJ_OVRVW_Q",
-      "order": 33,
+      "order": 34,
       "question": "Enter a brief project overview and technical notes",
       "dropdown_refs": []
     },
     {
       "question_id": "ST_WGT_APP_FOR_Q",
-      "order": 34,
+      "order": 35,
       "question": "What stated weight will this be applicable for: PACKAGE or INNER ITEM/POUCH?",
       "dropdown_refs": []
     },
     {
       "question_id": "ST_WGT_STATUS_Q",
-      "order": 35,
+      "order": 36,
       "question": "What is the status of the stated weight: ESTIMATED or FINALIZED?",
       "dropdown_refs": []
     },
     {
       "question_id": "ST_NET_WGT_Q",
-      "order": 36,
+      "order": 37,
       "question": "What is the stated net weight?",
       "dropdown_refs": []
     },
     {
       "question_id": "ST_NET_WGT_UOM_Q",
-      "order": 37,
-      "question": "What is the unit of measure of the stated net weight: OZ, LB, G, KG?",
+      "order": 38,
+      "question": "What is the unit of measure of the stated net weight: OZ, LB, G, or KG?",
       "dropdown_refs": []
     },
     {
       "question_id": "CASE_CT_STATUS_Q",
-      "order": 38,
+      "order": 39,
       "question": "What is the status of the case count: ESTIMATED or FINALIZED?",
       "dropdown_refs": []
     },
     {
       "question_id": "CASE_CT_Q",
-      "order": 39,
+      "order": 40,
       "question": "What is the case count?",
       "dropdown_refs": []
     },
     {
       "question_id": "LIKE_SKU_Q",
-      "order": 40,
-      "question": "What is a SKU number that can be a reference material for this new product? (only required for KUBIC Project Type)",
+      "order": 41,
+      "question": "What is a SKU number that can be a reference material for this new product? (Optional unless Project Type is KUBIC. Please use \"none\" or \"blank\" otherwise.)",
       "dropdown_refs": []
     },
     {
       "question_id": "DECISION_ECOMM_Q",
-      "order": 41,
+      "order": 42,
       "question": "",
       "dropdown_refs": []
     },
     {
       "question_id": "SELL_ECOMM_Q",
-      "order": 42,
+      "order": 43,
       "question": "Is this product approved to sell via Ecommerce?",
       "dropdown_refs": []
     },
     {
       "question_id": "ONE_CUSTOMER_Q",
-      "order": 43,
+      "order": 44,
       "question": "Is this product designated to one customer?",
       "dropdown_refs": []
     },
     {
       "question_id": "ONE_CUST_NAME_Q",
-      "order": 44,
+      "order": 45,
       "question": "Select the customer's name",
       "dropdown_refs": [
         "DESIGNATED_CUSTOMER_NAME_Q"
@@ -278,73 +284,85 @@
     },
     {
       "question_id": "INCL_ONE_CUST_MATL_Q",
-      "order": 45,
+      "order": 46,
       "question": "Should the customer's name be included in the material description?",
       "dropdown_refs": []
     },
     {
       "question_id": "DECISION_VAR_PACK_Q",
-      "order": 46,
-      "question": "",
-      "dropdown_refs": []
-    },
-    {
-      "question_id": "DTC_VAR_PACK_Q",
       "order": 47,
       "question": "",
       "dropdown_refs": []
     },
     {
-      "question_id": "VARIETY_PACK_Q",
+      "question_id": "CA_DECISION_VAR_PK_Q",
       "order": 48,
+      "question": "",
+      "dropdown_refs": []
+    },
+    {
+      "question_id": "DTC_VAR_PACK_Q",
+      "order": 49,
+      "question": "Is the DTC product a variety pack (usually NO)?",
+      "dropdown_refs": []
+    },
+    {
+      "question_id": "VARIETY_PACK_Q",
+      "order": 50,
       "question": "Is the product a variety pack?",
       "dropdown_refs": []
     },
     {
       "question_id": "VP_COMP_UPC_Q",
-      "order": 49,
+      "order": 51,
       "question": "Will the variety pack components have UPC codes?",
       "dropdown_refs": []
     },
     {
       "question_id": "BUILD_SKU_Q",
-      "order": 50,
+      "order": 52,
+      "question": "",
+      "dropdown_refs": []
+    },
+    {
+      "question_id": "CA_BUILD_SKU_Q",
+      "order": 53,
       "question": "",
       "dropdown_refs": []
     },
     {
       "question_id": "AWAY_FROM_HOME_Q",
-      "order": 51,
+      "order": 54,
       "question": "Is this item owned by Away From Home?",
       "dropdown_refs": []
     },
     {
       "question_id": "EXPORT_Q",
-      "order": 52,
+      "order": 55,
       "question": "Is this an Export Product?",
       "dropdown_refs": []
     },
     {
       "question_id": "BUILD_SKU_EXPORT_Q",
-      "order": 53,
-      "question": "Build the item using existing Export UPCs?",
+      "order": 56,
+      "question": "Build the item using Existing EXPORT UPCs?",
       "dropdown_refs": []
     },
     {
       "question_id": "LIST_EXPORT_UPC_Q",
-      "order": 54,
-      "question": "List the existing Export UPC codes",
+      "order": 57,
+      "question": "List the Existing EXPORT UPC codes",
       "dropdown_refs": []
     },
     {
       "question_id": "PRIV_LABEL_Q",
-      "order": 55,
+      "order": 58,
       "question": "Will the product have a private label?",
       "dropdown_refs": []
     },
     {
       "question_id": "PRIV_LABEL_NAME_Q",
-      "order": 56,
+      "order": 59,
       "question": "What is the private label name associated to the product?",
       "dropdown_refs": [
         "PRIVATE_LABEL_Q"
@@ -352,31 +370,31 @@
     },
     {
       "question_id": "BUILD_SKU_PRIV_Q",
-      "order": 57,
-      "question": "Build the item using existing Private Label UPCs?",
+      "order": 60,
+      "question": "Build the item using Existing PRIVATE LABEL UPCs?",
       "dropdown_refs": []
     },
     {
       "question_id": "LIST_PRIV_UPC_Q",
-      "order": 58,
-      "question": "List the existing Private Label UPC codes",
+      "order": 61,
+      "question": "List the Existing PRIVATE LABEL UPC codes",
       "dropdown_refs": []
     },
     {
       "question_id": "DATASYNC_Q",
-      "order": 59,
-      "question": "Should the product's information be sent through GDSN to the customer (DATASYNC)?",
+      "order": 62,
+      "question": "Should the product's information be sent through GDSN to the customer (DATASYNC)? (usually YES)",
       "dropdown_refs": []
     },
     {
       "question_id": "FERT_WIP_FALB_Q",
-      "order": 60,
+      "order": 63,
       "question": "Is this product a NON Sellable FERT (FALB)?",
       "dropdown_refs": []
     },
     {
       "question_id": "MATL_PREFIX_DESC_Q",
-      "order": 61,
+      "order": 64,
       "question": "What is the Material Prefix Description?",
       "dropdown_refs": [
         "MATERIAL_PREFIX"
@@ -384,79 +402,85 @@
     },
     {
       "question_id": "COMPRESS_UPC_Q",
-      "order": 62,
-      "question": "Is a compressed UPC required for any of the components: NO, POUCH, PACKAGE, BOTH?",
+      "order": 65,
+      "question": "Is a compressed UPC required for any of the components: NO, POUCH, PACKAGE, or BOTH?",
       "dropdown_refs": []
     },
     {
       "question_id": "DECISION_EXIST_PRTD_Q",
-      "order": 63,
+      "order": 66,
       "question": "",
       "dropdown_refs": []
     },
     {
       "question_id": "PACKAGE_UPC_Q",
-      "order": 64,
-      "question": "What is the existing Package UPC Code?",
+      "order": 67,
+      "question": "What is the Existing Package UPC Code?",
       "dropdown_refs": []
     },
     {
       "question_id": "PACKAGE_K_NUM_Q",
-      "order": 65,
-      "question": "What is the existing Package K Number?",
-      "dropdown_refs": []
-    },
-    {
-      "question_id": "POUCH_UPC_Q",
-      "order": 66,
-      "question": "What is the existing Pouch UPC Code?",
-      "dropdown_refs": []
-    },
-    {
-      "question_id": "POUCH_K_NUM_Q",
-      "order": 67,
-      "question": "What is the existing Pouch K Number?",
-      "dropdown_refs": []
-    },
-    {
-      "question_id": "DECISION_UPC_CODES_Q",
       "order": 68,
+      "question": "What is the K number for the Existing Package?",
+      "dropdown_refs": []
+    },
+    {
+      "question_id": "DECISION_POUCH_Q",
+      "order": 69,
       "question": "",
       "dropdown_refs": []
     },
     {
-      "question_id": "LIST_UPC_CODES_Q",
-      "order": 69,
-      "question": "List the UPC codes if already assigned",
-      "dropdown_refs": []
-    },
-    {
-      "question_id": "COMP_UPC_EXIST_Q",
+      "question_id": "POUCH_UPC_Q",
       "order": 70,
-      "question": "Indicate if the existing Pouch or Package (or both) are compressed: NO, POUCH, PACKAGE, BOTH",
+      "question": "What is the Existing POUCH UPC Code?",
       "dropdown_refs": []
     },
     {
-      "question_id": "SALES_SAMPLE_Q",
+      "question_id": "POUCH_K_NUM_Q",
       "order": 71,
-      "question": "Might Sale Samples be needed?",
+      "question": "What is the K number for the Existing POUCH?",
       "dropdown_refs": []
     },
     {
-      "question_id": "UNIQUE_UPC_Q",
+      "question_id": "DECISION_UPC_CODES_Q",
       "order": 72,
       "question": "",
       "dropdown_refs": []
     },
     {
-      "question_id": "LIST_EXIST_K_NUM_Q",
+      "question_id": "LIST_UPC_CODES_Q",
       "order": 73,
-      "question": "List any existing Knumbers that will be used",
+      "question": "List any other Existing UPC codes to be used not already mentioned (Please use \"none\" or \"blank\" otherwise.)",
+      "dropdown_refs": []
+    },
+    {
+      "question_id": "COMP_UPC_EXIST_Q",
+      "order": 74,
+      "question": "Indicate IF the EXISTING Pouch or Package (or both) are compressed: NO, POUCH, PACKAGE, or BOTH",
+      "dropdown_refs": []
+    },
+    {
+      "question_id": "FINISH_EXIST_PRTD_Q",
+      "order": 75,
+      "question": "",
+      "dropdown_refs": []
+    },
+    {
+      "question_id": "SALES_SAMPLE_Q",
+      "order": 76,
+      "question": "Might Sale Samples be needed?",
+      "dropdown_refs": []
+    },
+    {
+      "question_id": "LIST_EXIST_K_NUM_Q",
+      "order": 77,
+      "question": "List any other EXISTING K numbers to be used not already mentioned (Please use \"none\" or \"blank\" otherwise.)",
       "dropdown_refs": []
     },
     {
       "question_id": "ADDTNL_PKG_LAUNCH_Q",
-      "order": 74,
+      "order": 78,
       "question": "Select all special packaging requirements needed for launch.",
       "dropdown_refs": [
         "ADDITIONAL_PACKAGING_LAUNCH_Q"
@@ -464,13 +488,13 @@
     },
     {
       "question_id": "UNSURE_Q",
-      "order": 75,
-      "question": "If unsure what to select, please reach out to the Supply Chain Data Governance team at scdatagov@kellanova.com.  Step-by-Step process has ended.",
+      "order": 79,
+      "question": "If unsure what to select, please review the Training section or reach out to the Supply Chain Data Governance team at scdatagov@kellanova.com.  Step-by-Step process has ended.",
       "dropdown_refs": []
     },
     {
-      "question_id": "END_REQ_INITIATE_Q",
-      "order": 76,
+      "question_id": "FINISH_REQ_INITIATE_Q",
+      "order": 80,
       "question": "",
       "dropdown_refs": []
     }
@@ -513,7 +537,7 @@
         "Mexico",
         "MX"
       ],
-      "raw": "If 'Latin America' or 'LA' or 'Mexico' or 'MX' is selected then \"Product Country\" (1008) is <'LA - Latin America'>.  Go to NOT_CA_FORM_TYPE_Q."
+      "raw": "IF ('Latin America' or 'LA' or 'Mexico' or 'MX') is selected then \"Product Country\" (1008) is <'LA - Latin America'>.  Go to NOT_CA_FORM_TYPE_Q. END."
     },
     {
       "from": "PROD_COUNTRY_Q",
@@ -522,27 +546,30 @@
         "Europe",
         "EU"
       ],
-      "raw": "If 'Europe' or 'EU' is selected then \"Product Country\" (1008) is <'EU - Europe'>.  Go to NOT_CA_FORM_TYPE_Q."
+      "raw": "ELSE IF ('Europe' or 'EU') is selected then \"Product Country\" (1008) is <'EU - Europe'>.  Go to NOT_CA_FORM_TYPE_Q.  END."
     },
     {
       "from": "PROD_COUNTRY_Q",
       "to": "NOT_CA_FORM_TYPE_Q",
       "conditions": [
         "Asia-Pacific",
+        "AP",
         "Middle East",
+        "ME",
         "Africa",
         "AMEA"
       ],
-      "raw": "If 'Asia-Pacific' or 'Middle East' or ' Africa' or 'AMEA' is selected then \"Product Country\" (1008) is <'AMEA - Asia-Pacific, Middle East, Africa'>.  Go to NOT_CA_FORM_TYPE_Q."
+      "raw": "ELSE IF ('Asia-Pacific' or 'AP' or 'Middle East' or 'ME' or ' Africa' or 'AMEA') is selected then \"Product Country\" (1008) is <'AMEA - Asia-Pacific, Middle East, Africa'>.  Go to NOT_CA_FORM_TYPE_Q.  END."
     },
     {
       "from": "PROD_COUNTRY_Q",
       "to": "NOT_CA_FORM_TYPE_Q",
       "conditions": [
         "United States",
-        "US"
+        "US",
+        "USA"
       ],
-      "raw": "If 'United States' or 'US' is selected then \"Product Country\" (1008) is <'US - United States'>.  Go to NOT_CA_FORM_TYPE_Q."
+      "raw": "ELSE IF ('United States' or 'US' or 'USA') is selected then \"Product Country\" (1008) is <'US - United States'>.  Go to NOT_CA_FORM_TYPE_Q.  END."
     },
     {
       "from": "PROD_COUNTRY_Q",
@@ -551,7 +578,7 @@
         "Canada",
         "CA"
       ],
-      "raw": "If 'Canada' or 'CA' is selected then \"Product Country\" (1008) is <'CA - Canada'> and \"Form Type\" (1007) is <'CASE'>. Go to CA_Q."
+      "raw": "ELSE IF ('Canada' or 'CA') is selected then \"Product Country\" (1008) is <'CA - Canada'> and \"Form Type\" (1007) is <'CASE'>. Go to CA_Q. END."
     },
     {
       "from": "PROD_COUNTRY_Q",
@@ -559,7 +586,7 @@
       "conditions": [
         "UNSURE"
       ],
-      "raw": "If 'UNSURE' is selected then Go to UNSURE_Q."
+      "raw": "ELSE IF 'UNSURE' is selected then Go to UNSURE_Q. END IF."
     },
     {
       "from": "PROD_COUNTRY_Q",
@@ -575,7 +602,7 @@
       "conditions": [
         "DISPLAY"
       ],
-      "raw": "If 'DISPLAY' is selected then \"Form Type\" (1007) is <'DISPLAY'>.  Go to DISPLAY_Q."
+      "raw": "IF 'DISPLAY' is selected then \"Form Type\" (1007) is <'DISPLAY'>.  Go to DISPLAY_Q.   END."
     },
     {
       "from": "NOT_CA_FORM_TYPE_Q",
@@ -583,7 +610,7 @@
       "conditions": [
         "CASE"
       ],
-      "raw": "If 'CASE' is selected then \"Form Type\" (1007) is <'CASE'>. Go to CASE_Q."
+      "raw": "ELSE IF 'CASE' is selected then \"Form Type\" (1007) is <'CASE'>. Go to CASE_Q.   END."
     },
     {
       "from": "NOT_CA_FORM_TYPE_Q",
@@ -591,7 +618,7 @@
       "conditions": [
         "WIP"
       ],
-      "raw": "If 'WIP' is selected then \"Form Type\" (1007) is <'WIP'>. Go to WIP_Q."
+      "raw": "ELSE IF 'WIP' is selected then \"Form Type\" (1007) is <'WIP'>. Go to WIP_Q. END."
     },
     {
       "from": "NOT_CA_FORM_TYPE_Q",
@@ -599,7 +626,7 @@
       "conditions": [
         "UNSURE"
       ],
-      "raw": "If 'UNSURE' is selected then Go to UNSURE_Q."
+      "raw": "ELSE IF 'UNSURE' is selected then Go to UNSURE_Q. END IF."
     },
     {
       "from": "NOT_CA_FORM_TYPE_Q",
@@ -611,11 +638,11 @@
     },
     {
       "from": "DISPLAY_Q",
-      "to": "END_COUNTRY_Q",
+      "to": "FINISH_COUNTRY_Q",
       "conditions": [
         "SHIPPER"
       ],
-      "raw": "If 'SHIPPER' is selected then \"Product Type\" (1009) is <'SHIPPER'> and \"product subtype\" (1010) is <'<NOT REQUIRED>'>. Go to END_COUNTRY_Q."
+      "raw": "IF 'SHIPPER' is selected then (\"Product Type\" (1009) is <'SHIPPER'> and \"product subtype\" (1010) is <'<not required>'>). Go to FINISH_COUNTRY_Q.   END."
     },
     {
       "from": "DISPLAY_Q",
@@ -623,7 +650,7 @@
       "conditions": [
         "MOD"
       ],
-      "raw": "If 'MOD' is selected then Go to MOD_TYPE_Q."
+      "raw": "ELSE IF 'MOD' is selected then Go to MOD_TYPE_Q. END IF."
     },
     {
       "from": "DISPLAY_Q",
@@ -635,19 +662,19 @@
     },
     {
       "from": "MOD_TYPE_Q",
-      "to": "END_COUNTRY_Q",
+      "to": "FINISH_COUNTRY_Q",
       "conditions": [
         "QUARTER"
       ],
-      "raw": "If 'QUARTER' is selected then \"Product Type\" (1009) is <'Qtr Mod'> and \"product subtype\" (1010) is <'<NOT REQUIRED>'>.  Go to END_COUNTRY_Q."
+      "raw": "IF 'QUARTER' is selected then (\"Product Type\" (1009) is <'Qtr Mod'> and \"product subtype\" (1010) is <'<not required>'>).  Go to FINISH_COUNTRY_Q.  END."
     },
     {
       "from": "MOD_TYPE_Q",
-      "to": "END_COUNTRY_Q",
+      "to": "FINISH_COUNTRY_Q",
       "conditions": [
         "HALF"
       ],
-      "raw": "If 'HALF' is selected then \"Product Type\" (1009) is <'Half Mod'> and \"product subtype\" (1010) is <'<NOT REQUIRED>'>. Go to END_COUNTRY_Q."
+      "raw": "ELSE IF 'HALF' is selected then (\"Product Type\" (1009) is <'Half Mod'> and \"product subtype\" (1010) is <'<not required>'>). Go to FINISH_COUNTRY_Q.  END."
     },
     {
       "from": "MOD_TYPE_Q",
@@ -655,7 +682,7 @@
       "conditions": [
         "FULL"
       ],
-      "raw": "If 'FULL' is selected then Go to FULL_MOD_Q."
+      "raw": "ELSE IF 'FULL' is selected then Go to FULL_MOD_Q.   END IF."
     },
     {
       "from": "MOD_TYPE_Q",
@@ -667,19 +694,19 @@
     },
     {
       "from": "FULL_MOD_Q",
-      "to": "END_COUNTRY_Q",
+      "to": "FINISH_COUNTRY_Q",
       "conditions": [
         "full cases"
       ],
-      "raw": "If 'full cases' is selected then \"Product Type\" (1009) is <'Rainbow Mod'> and \"product subtype\" (1010) is <'<NOT REQUIRED>'>.  Go to END_COUNTRY_Q."
+      "raw": "IF 'full cases' is selected then (\"Product Type\" (1009) is <'Rainbow Mod'> and \"product subtype\" (1010) is <'<not required>'>).  Go to FINISH_COUNTRY_Q. END."
     },
     {
       "from": "FULL_MOD_Q",
-      "to": "END_COUNTRY_Q",
+      "to": "FINISH_COUNTRY_Q",
       "conditions": [
         "trays"
       ],
-      "raw": "If 'trays' is selected then \"Product Type\" (1009) is <'Full Mod'> and \"product subtype\" (1010) is <'<NOT REQUIRED>'>. Go to END_COUNTRY_Q."
+      "raw": "ELSE IF 'trays' is selected then (\"Product Type\" (1009) is <'Full Mod'> and \"product subtype\" (1010) is <'<not required>'>). Go to FINISH_COUNTRY_Q. END IF."
     },
     {
       "from": "FULL_MOD_Q",
@@ -695,7 +722,7 @@
       "conditions": [
         "CLUB"
       ],
-      "raw": "If 'CLUB' is selected then Go to CLUB_Q."
+      "raw": "IF 'CLUB' is selected then Go to CLUB_Q.  END."
     },
     {
       "from": "CASE_Q",
@@ -703,7 +730,7 @@
       "conditions": [
         "TRADITIONAL"
       ],
-      "raw": "If 'TRADITIONAL' is selected. Go to TRADITIONAL_Q."
+      "raw": "ELSE IF 'TRADITIONAL' is selected then Go to TRADITIONAL_Q.  END."
     },
     {
       "from": "CASE_Q",
@@ -711,7 +738,7 @@
       "conditions": [
         "E-COMMERCE"
       ],
-      "raw": "If 'E-COMMERCE' is selected. Go to ECOMM_Q."
+      "raw": "ELSE IF 'E-COMMERCE' is selected then Go to ECOMM_Q.  END."
     },
     {
       "from": "CASE_Q",
@@ -719,7 +746,7 @@
       "conditions": [
         "RX DTC"
       ],
-      "raw": "If 'RX DTC' is selected. Go to RX_DTC_Q."
+      "raw": "ELSE IF 'RX DTC' is selected then Go to RX_DTC_Q. END IF."
     },
     {
       "from": "CASE_Q",
@@ -735,7 +762,7 @@
       "conditions": [
         "EXISTING"
       ],
-      "raw": "If 'EXISTING' is selected then \"Product Type\" (1009) is <'Club Repack/RCP'>. Go to NEW_CLUB_Q."
+      "raw": "IF 'EXISTING' is selected then \"Product Type\" (1009) is <'Club Repack/RCP'>. Go to NEW_CLUB_Q. END."
     },
     {
       "from": "CLUB_Q",
@@ -743,7 +770,7 @@
       "conditions": [
         "NEW"
       ],
-      "raw": "If 'NEW' is selected then \"Product Type\" (1009) is <'Club'>. Go to NEW_CLUB_Q."
+      "raw": "ELSE IF 'NEW' is selected then \"Product Type\" (1009) is <'Club'>. Go to NEW_CLUB_Q. END IF."
     },
     {
       "from": "CLUB_Q",
@@ -755,17 +782,20 @@
     },
     {
       "from": "NEW_CLUB_Q",
-      "to": "END_COUNTRY_Q",
+      "to": "FINISH_COUNTRY_Q",
       "conditions": [
-        "full"
+        "full",
+        "unit load"
       ],
-      "raw": "If 'full' or \u2018unit load\u2019 is selected then \"product subtype\" (1010) is <'Traditional 1PKG=1CS'>. Go to END_COUNTRY_Q."
+      "raw": "IF ('full' or 'unit load') is selected then \"product subtype\" (1010) is <'Traditional 1PKG=1CS'>. Go to FINISH_COUNTRY_Q. END."
     },
     {
       "from": "NEW_CLUB_Q",
-      "to": "END_COUNTRY_Q",
-      "conditions": [],
-      "raw": "If \u2018case\u2019 is selected then \"product subtype\" (1010) is <'Non-Traditional'>. Go to END_COUNTRY_Q."
+      "to": "FINISH_COUNTRY_Q",
+      "conditions": [
+        "case"
+      ],
+      "raw": "ELSE IF 'case' is selected then \"product subtype\" (1010) is <'Non-Traditional'>. Go to FINISH_COUNTRY_Q. END IF."
     },
     {
       "from": "NEW_CLUB_Q",
@@ -779,13 +809,13 @@
       "from": "TRADITIONAL_Q",
       "to": "STRAIGHT_Q",
       "conditions": [],
-      "raw": "If \u2018straight case\u2019 is selected then Go to STRAIGHT_Q."
+      "raw": "IF \u2018straight case\u2019 is selected then Go to STRAIGHT_Q.  END."
     },
     {
       "from": "TRADITIONAL_Q",
       "to": "BULK_Q",
       "conditions": [],
-      "raw": "If \u2018bulk case\u2019 is selected then Go to BULK_Q."
+      "raw": "ELSE IF \u2018bulk case\u2019 is selected then Go to BULK_Q.  END."
     },
     {
       "from": "TRADITIONAL_Q",
@@ -793,7 +823,7 @@
       "conditions": [
         "SS"
       ],
-      "raw": "If \u2018single serve\u2019 or 'SS' is selected then Go to SINGLE_Q."
+      "raw": "ELSE IF (\u2018single serve\u2019 or 'SS') is selected then Go to SINGLE_Q. END IF."
     },
     {
       "from": "TRADITIONAL_Q",
@@ -809,7 +839,7 @@
       "conditions": [
         "EXISTING"
       ],
-      "raw": "If 'EXISTING' is selected then \"Product Type\" (1009) is <'Straight Case Repack/RCP'>. Go to STR_SUBTYPE_Q."
+      "raw": "IF 'EXISTING' is selected then \"Product Type\" (1009) is <'Straight Case Repack/RCP'>. Go to STR_SUBTYPE_Q. END."
     },
     {
       "from": "STRAIGHT_Q",
@@ -817,7 +847,7 @@
       "conditions": [
         "NEW"
       ],
-      "raw": "If 'NEW' is selected then \"Product Type\" (1009) is <'Straight Case'>. Go to STR_SUBTYPE_Q."
+      "raw": "ELSE IF 'NEW' is selected then \"Product Type\" (1009) is <'Straight Case'>. Go to STR_SUBTYPE_Q. END IF."
     },
     {
       "from": "STRAIGHT_Q",
@@ -829,19 +859,19 @@
     },
     {
       "from": "STR_SUBTYPE_Q",
-      "to": "END_COUNTRY_Q",
+      "to": "FINISH_COUNTRY_Q",
       "conditions": [
         "YES"
       ],
-      "raw": "If 'YES' is selected \"product subtype\" (1010) is <'Package and pouch/inner item with UPCs'>. Go to END_COUNTRY_Q."
+      "raw": "IF 'YES' is selected then \"product subtype\" (1010) is <'Package and pouch/inner item with UPCs'>. Go to FINISH_COUNTRY_Q. END."
     },
     {
       "from": "STR_SUBTYPE_Q",
-      "to": "END_COUNTRY_Q",
+      "to": "FINISH_COUNTRY_Q",
       "conditions": [
         "NO"
       ],
-      "raw": "If 'NO' is selected then \"product subtype\" (1010) is <'Package with UPC'>. Go to END_COUNTRY_Q."
+      "raw": "ELSE IF 'NO' is selected then \"product subtype\" (1010) is <'Package with UPC'>. Go to FINISH_COUNTRY_Q. END IF."
     },
     {
       "from": "STR_SUBTYPE_Q",
@@ -857,15 +887,15 @@
       "conditions": [
         "YES"
       ],
-      "raw": "If 'YES' is selected then Go to BULK_PRINT_Q."
+      "raw": "IF 'YES' is selected then Go to BULK_PRINT_Q.   END."
     },
     {
       "from": "BULK_Q",
-      "to": "END_COUNTRY_Q",
+      "to": "FINISH_COUNTRY_Q",
       "conditions": [
         "NO"
       ],
-      "raw": "If 'NO' is selected then \"Product Type\" (1009) is <'Bulk Case'> and \"product subtype\" (1010) is <'No Package UPC'>. Go to END_COUNTRY_Q."
+      "raw": "ELSE IF 'NO' is selected then (\"Product Type\" (1009) is <'Bulk Case'> and \"product subtype\" (1010) is <'No Package UPC'>). Go to FINISH_COUNTRY_Q. END IF."
     },
     {
       "from": "BULK_Q",
@@ -877,19 +907,19 @@
     },
     {
       "from": "BULK_PRINT_Q",
-      "to": "END_COUNTRY_Q",
+      "to": "FINISH_COUNTRY_Q",
       "conditions": [
         "NEW"
       ],
-      "raw": "If 'NEW' is selected then \"Product Type\" (1009) is <'Bulk Case'> and \"product subtype\"  (1010) is <'Package with UPC'>. Go to END_COUNTRY_Q."
+      "raw": "IF 'NEW' is selected then (\"Product Type\" (1009) is <'Bulk Case'> and \"product subtype\"  (1010) is <'Package with UPC'>). Go to FINISH_COUNTRY_Q. END."
     },
     {
       "from": "BULK_PRINT_Q",
-      "to": "END_COUNTRY_Q",
+      "to": "FINISH_COUNTRY_Q",
       "conditions": [
         "EXISTING"
       ],
-      "raw": "If 'EXISTING' is selected then \"Product Type\" (1009) is <'Bulk Repack/RCP'> and \"product subtype\" (1010) is <'Package with UPC'>. Go to END_COUNTRY_Q."
+      "raw": "ELSE IF 'EXISTING' is selected then (\"Product Type\" (1009) is <'Bulk Repack/RCP'> and \"product subtype\" (1010) is <'Package with UPC'>). Go to FINISH_COUNTRY_Q. END IF."
     },
     {
       "from": "BULK_PRINT_Q",
@@ -901,19 +931,19 @@
     },
     {
       "from": "SINGLE_Q",
-      "to": "END_COUNTRY_Q",
+      "to": "FINISH_COUNTRY_Q",
       "conditions": [
         "NEW"
       ],
-      "raw": "If 'NEW' is selected then \"Product Type\" (1009) is <'Single Serve'> and \"product subtype\" (1010) is <'With Tray'>. Go to END_COUNTRY_Q."
+      "raw": "IF 'NEW' is selected then (\"Product Type\" (1009) is <'Single Serve'> and \"product subtype\" (1010) is <'With Tray'>). Go to FINISH_COUNTRY_Q. END."
     },
     {
       "from": "SINGLE_Q",
-      "to": "END_COUNTRY_Q",
+      "to": "FINISH_COUNTRY_Q",
       "conditions": [
         "EXISTING"
       ],
-      "raw": "If 'EXISTING' is selected then \"Product Type\" (1009) is <'Single Serve Repack/RCP'> and \"product subtype\" (1010) is <'With Tray'>. Go to END_COUNTRY_Q."
+      "raw": "ELSE IF 'EXISTING' is selected then (\"Product Type\" (1009) is <'Single Serve Repack/RCP'> and \"product subtype\" (1010) is <'With Tray'>). Go to FINISH_COUNTRY_Q. END IF."
     },
     {
       "from": "SINGLE_Q",
@@ -925,15 +955,15 @@
     },
     {
       "from": "ECOMM_Q",
-      "to": "END_COUNTRY_Q",
+      "to": "FINISH_COUNTRY_Q",
       "conditions": [],
-      "raw": "If \u2018Brown\u2019 or \u2018Corrugate\u2019 is selected then \"product type\" (1009) is <'ECOMM'> and \"product subtype\" (1010) is <'CASE (Brown Box)'>.  Go to END_COUNTRY_Q."
+      "raw": "IF (\u2018Brown\u2019 or \u2018Corrugate\u2019) is selected then (\"Product Type\" (1009) is <'ECOMM'> and \"Product Subtype\" (1010) is <'CASE (Brown Box)'>).  Go to FINISH_COUNTRY_Q. END."
     },
     {
       "from": "ECOMM_Q",
-      "to": "END_COUNTRY_Q",
+      "to": "FINISH_COUNTRY_Q",
       "conditions": [],
-      "raw": "If \u2018Printed\u2019 is selected then \"product type\" (1009) is <'ECOMM'> and \"product subtype\" (1010) is <'CASE (Printed Box)'>. Go to END_COUNTRY_Q."
+      "raw": "ELSE IF \u2018Printed\u2019 is selected then (\"Product Type\" (1009) is <'ECOMM'> and \"Product Subtype\" (1010) is <'CASE (Printed Box)'>). Go to FINISH_COUNTRY_Q. END IF."
     },
     {
       "from": "ECOMM_Q",
@@ -945,9 +975,9 @@
     },
     {
       "from": "RX_DTC_Q",
-      "to": "END_COUNTRY_Q",
+      "to": "FINISH_COUNTRY_Q",
       "conditions": [],
-      "raw": "If \u2018RX DTC\u2019 is selected then \"Product Type\" (1009) is <\u2018DTC Bundle\u2019> and \"product subtype\" (1010) is <'Static (Pre-Determined Mix of Products)'>. Go to END_COUNTRY_Q."
+      "raw": "IF \u2018RX DTC\u2019 is selected then (\"Product Type\" (1009) is <\u2018DTC Bundle\u2019> and \"Product Subtype\" (1010) is <'Static (Pre-Determined Mix of Products)'>). Go to FINISH_COUNTRY_Q. END IF."
     },
     {
       "from": "RX_DTC_Q",
@@ -959,20 +989,20 @@
     },
     {
       "from": "WIP_Q",
-      "to": "END_COUNTRY_Q",
+      "to": "FINISH_COUNTRY_Q",
       "conditions": [
         "Case"
       ],
-      "raw": "If 'Case' is selected then \"Product Type\" (1009) is <'WIP Case'> and \"product subtype\" (1010) is <'<NOT REQUIRED>'>. Go to END_COUNTRY_Q."
+      "raw": "IF 'Case' is selected then (\"Product Type\" (1009) is <'WIP Case'> and \"Product Subtype\" (1010) is <'<not required>'>). Go to FINISH_COUNTRY_Q. END."
     },
     {
       "from": "WIP_Q",
-      "to": "END_COUNTRY_Q",
+      "to": "FINISH_COUNTRY_Q",
       "conditions": [
         "Tote",
         "Kone"
       ],
-      "raw": "If 'Tote' or 'Kone' is selected then \"Product Type\" (1009) is <'WIP Tote'> and \"product subtype\" (1010) is <'<NOT REQUIRED>'>. Go to END_COUNTRY_Q."
+      "raw": "ELSE IF ('Tote' or 'Kone') is selected then (\"Product Type\" (1009) is <'WIP Tote'> and \"Product Subtype\" (1010) is <'<not required>'>). Go to FINISH_COUNTRY_Q. END IF."
     },
     {
       "from": "WIP_Q",
@@ -988,7 +1018,7 @@
       "conditions": [
         "Club"
       ],
-      "raw": "If 'Club' is selected then \"Product Type\" (1009) is <'Canada Club'>. Go to CA_CLUB_Q."
+      "raw": "IF 'Club' is selected then \"Product Type\" (1009) is <'Canada Club'>. Go to CA_CLUB_Q.  END."
     },
     {
       "from": "CA_Q",
@@ -996,7 +1026,7 @@
       "conditions": [
         "traditional retailer"
       ],
-      "raw": "If 'traditional retailer' is selected then Go to CA_TRADITIONAL_Q."
+      "raw": "ELSE IF 'traditional retailer' is selected then Go to CA_TRADITIONAL_Q. END IF."
     },
     {
       "from": "CA_Q",
@@ -1008,15 +1038,15 @@
     },
     {
       "from": "CA_CLUB_Q",
-      "to": "END_COUNTRY_Q",
+      "to": "FINISH_COUNTRY_Q",
       "conditions": [],
-      "raw": "If \u2018yes\u2019 is selected then \"product subtype\" (1010) is <'Unit Load'>. Go to END_COUNTRY_Q."
+      "raw": "IF \u2018yes\u2019 is selected then \"product subtype\" (1010) is <'Unit Load'>. Go to FINISH_COUNTRY_Q. END."
     },
     {
       "from": "CA_CLUB_Q",
-      "to": "END_COUNTRY_Q",
+      "to": "FINISH_COUNTRY_Q",
       "conditions": [],
-      "raw": "If \u2018no\u2019 is selected then \"product subtype\" (1010) is <'Traditional 1PKG=1CS'>. Go to END_COUNTRY_Q."
+      "raw": "ELSE IF \u2018no\u2019 is selected then \"product subtype\" (1010) is <'Traditional 1PKG=1CS'>. Go to FINISH_COUNTRY_Q. END IF."
     },
     {
       "from": "CA_CLUB_Q",
@@ -1032,15 +1062,15 @@
       "conditions": [
         "straight case"
       ],
-      "raw": "If 'straight case' is selected then Go to CA_STRAIGHT_Q."
+      "raw": "IF 'straight case' is selected then Go to CA_STRAIGHT_Q.  END."
     },
     {
       "from": "CA_TRADITIONAL_Q",
-      "to": "END_COUNTRY_Q",
+      "to": "FINISH_COUNTRY_Q",
       "conditions": [
         "bulk case"
       ],
-      "raw": "If 'bulk case' is selected then \"Product Type\" (1009) is <'Canada Bulk Case'> and \"product subtype\" (1010) is <'<NOT REQUIRED>'>. Go to END_COUNTRY_Q."
+      "raw": "ELSE IF 'bulk case' is selected then (\"Product Type\" (1009) is <'Canada Bulk Case'> and \"Product Subtype\" (1010) is <'<not required>'>). Go to FINISH_COUNTRY_Q. END IF."
     },
     {
       "from": "CA_TRADITIONAL_Q",
@@ -1056,7 +1086,7 @@
       "conditions": [
         "NEW"
       ],
-      "raw": "If 'NEW' then \"Product Type\" is <'Canada Straight Case'>. Go to CA_STR_SUBTYPE_Q."
+      "raw": "IF 'NEW' is selected then \"Product Type\" is <'Canada Straight Case'>. Go to CA_STR_SUBTYPE_Q. END."
     },
     {
       "from": "CA_STRAIGHT_Q",
@@ -1064,7 +1094,7 @@
       "conditions": [
         "EXISTING"
       ],
-      "raw": "If 'EXISTING' is selected then \"Product Type\" (1009) is <'Canada Straight Case Repack/RCP \u2013 existing PKG UPC'>. Go to CA_STR_SUBTYPE_Q."
+      "raw": "ELSE IF 'EXISTING' is selected then \"Product Type\" (1009) is <'Canada Straight Case Repack/RCP - existing PKG UPC'>. Go to CA_STR_SUBTYPE_Q. END IF."
     },
     {
       "from": "CA_STRAIGHT_Q",
@@ -1076,32 +1106,32 @@
     },
     {
       "from": "CA_STR_SUBTYPE_Q",
-      "to": "END_COUNTRY_Q",
+      "to": "FINISH_COUNTRY_Q",
       "conditions": [],
-      "raw": "If \u2018yes\u2019 is selected then \"product subtype\" (1010) is <'Package and pouch/inner item with UPCs'>. Go to END_COUNTRY_Q."
+      "raw": "IF \u2018yes\u2019 is selected then \"product subtype\" (1010) is <'Package and pouch/inner item with UPCs'>. Go to FINISH_COUNTRY_Q. END."
     },
     {
       "from": "CA_STR_SUBTYPE_Q",
-      "to": "END_COUNTRY_Q",
+      "to": "FINISH_COUNTRY_Q",
       "conditions": [],
-      "raw": "If \u2018no\u2019 is selected then \"product subtype\" (1010) is <'Package with UPC'>. Go to END_COUNTRY_Q."
+      "raw": "ELSE IF \u2018no\u2019 is selected then \"product subtype\" (1010) is <'Package with UPC'>. Go to FINISH_COUNTRY_Q. END IF."
     },
     {
       "from": "CA_STR_SUBTYPE_Q",
-      "to": "END_COUNTRY_Q",
+      "to": "FINISH_COUNTRY_Q",
       "conditions": [
         "<implicit_next_row>"
       ],
       "raw": "Implicit next row fallback"
     },
     {
-      "from": "END_COUNTRY_Q",
+      "from": "FINISH_COUNTRY_Q",
       "to": "PRINGLES_Q",
       "conditions": [],
       "raw": "Remind the user that this is a good time to save their progress by clicking the Save Progress button. Go to PRINGLES_Q."
     },
     {
-      "from": "END_COUNTRY_Q",
+      "from": "FINISH_COUNTRY_Q",
       "to": "PRINGLES_Q",
       "conditions": [
         "<implicit_next_row>"
@@ -1111,20 +1141,8 @@
     {
       "from": "PRINGLES_Q",
       "to": "RX_Q",
-      "conditions": [
-        "YES",
-        "Yes"
-      ],
-      "raw": "If 'YES', enter <'Yes'>. Go to RX_Q."
-    },
-    {
-      "from": "PRINGLES_Q",
-      "to": "RX_Q",
-      "conditions": [
-        "NO",
-        "No"
-      ],
-      "raw": "If 'NO', enter <'No'>. Go to RX_Q."
+      "conditions": [],
+      "raw": "Capture \"Is this a Pringles product\" (1011), either <'Yes'> or <'No'>. Go to RX_Q."
     },
     {
       "from": "PRINGLES_Q",
@@ -1136,37 +1154,31 @@
     },
     {
       "from": "RX_Q",
-      "to": "PROJECT_TYPE_Q",
-      "conditions": [
-        "YES",
-        "Yes"
-      ],
-      "raw": "If 'YES', enter <'Yes'>. Go to PROJECT_TYPE_Q."
+      "to": "SAP_MATL_NUM_Q",
+      "conditions": [],
+      "raw": "Capture \"Is this an RX product\" (1012), either <'Yes'> or <'No'>. Go to SAP_MATL_NUM_Q."
     },
     {
       "from": "RX_Q",
-      "to": "PROJECT_TYPE_Q",
-      "conditions": [
-        "NO",
-        "No"
-      ],
-      "raw": "If 'NO', enter <'No'>. Go to PROJECT_TYPE_Q."
-    },
-    {
-      "from": "RX_Q",
-      "to": "PROJECT_TYPE_Q",
+      "to": "SAP_MATL_NUM_Q",
       "conditions": [
         "<implicit_next_row>"
       ],
       "raw": "Implicit next row fallback"
     },
     {
-      "from": "PROJECT_TYPE_Q",
-      "to": "PWR_Q",
+      "from": "SAP_MATL_NUM_Q",
+      "to": "PROJECT_TYPE_Q",
+      "conditions": [],
+      "raw": "\"SAP Material Number\" (1013) is <'<not required>'>. Go to PROJECT_TYPE_Q."
+    },
+    {
+      "from": "SAP_MATL_NUM_Q",
+      "to": "PROJECT_TYPE_Q",
       "conditions": [
-        "PWR"
+        "<implicit_next_row>"
       ],
-      "raw": "If 'PWR' is selected then \"project type\" (1014) is <'PWR'>. Go to PWR_Q."
+      "raw": "Implicit next row fallback"
     },
     {
       "from": "PROJECT_TYPE_Q",
@@ -1174,7 +1186,15 @@
       "conditions": [
         "PDR"
       ],
-      "raw": "If 'PDR' is selected then \"project type\" (1014) is <'PDR'>. Go to PROJECT_NAME_Q."
+      "raw": "IF 'PDR' is selected then Go to PROJECT_NAME_Q. END."
+    },
+    {
+      "from": "PROJECT_TYPE_Q",
+      "to": "PWR_Q",
+      "conditions": [
+        "PWR"
+      ],
+      "raw": "ELSE IF 'PWR' is selected then Go to PWR_Q. END."
     },
     {
       "from": "PROJECT_TYPE_Q",
@@ -1182,7 +1202,7 @@
       "conditions": [
         "SCR"
       ],
-      "raw": "If 'SCR' is selected then \"project type\" (1014) is <'SCR'>. Go to PROJECT_NAME_Q."
+      "raw": "ELSE IF 'SCR' is selected then Go to PROJECT_NAME_Q. END."
     },
     {
       "from": "PROJECT_TYPE_Q",
@@ -1190,10 +1210,24 @@
       "conditions": [
         "KUBIC"
       ],
-      "raw": "If 'KUBIC' is selected then \"project type\" (1014) is <'KUBIC'>. Go to PROJECT_NAME_Q."
+      "raw": "ELSE IF 'KUBIC' is selected then Go to PROJECT_NAME_Q. END IF."
     },
     {
       "from": "PROJECT_TYPE_Q",
+      "to": "PROJECT_NAME_Q",
+      "conditions": [
+        "<implicit_next_row>"
+      ],
+      "raw": "Implicit next row fallback"
+    },
+    {
+      "from": "PROJECT_NAME_Q",
+      "to": "FINISH_PROJ_TYPE_Q",
+      "conditions": [],
+      "raw": "Capture \"Project Name or Number\" (1015) field (must be alphanumeric and can include a dash and can include spaces) <FREEFORM>. Go to FINISH_PROJ_TYPE_Q."
+    },
+    {
+      "from": "PROJECT_NAME_Q",
       "to": "PWR_Q",
       "conditions": [
         "<implicit_next_row>"
@@ -1202,40 +1236,26 @@
     },
     {
       "from": "PWR_Q",
-      "to": "END_PROJ_TYPE_Q",
+      "to": "FINISH_PROJ_TYPE_Q",
       "conditions": [],
-      "raw": "Capture \"Project Name or Number\" (1015) field (must be numeric, can include a dash) <FREEFORM>. Go to END_PROJ_TYPE_Q."
+      "raw": "Capture \"Project Name or Number\" (1015) field (must be numeric, can include a dash) <FREEFORM>. Go to FINISH_PROJ_TYPE_Q."
     },
     {
       "from": "PWR_Q",
-      "to": "PROJECT_NAME_Q",
+      "to": "FINISH_PROJ_TYPE_Q",
       "conditions": [
         "<implicit_next_row>"
       ],
       "raw": "Implicit next row fallback"
     },
     {
-      "from": "PROJECT_NAME_Q",
-      "to": "END_PROJ_TYPE_Q",
-      "conditions": [],
-      "raw": "Capture \"Project Name or Number\" (1015) field (must be alphanumeric and numeric and can include a dash) <FREEFORM>. Go to END_PROJ_TYPE_Q."
-    },
-    {
-      "from": "PROJECT_NAME_Q",
-      "to": "END_PROJ_TYPE_Q",
-      "conditions": [
-        "<implicit_next_row>"
-      ],
-      "raw": "Implicit next row fallback"
-    },
-    {
-      "from": "END_PROJ_TYPE_Q",
+      "from": "FINISH_PROJ_TYPE_Q",
       "to": "SET_CATEGORY_Q",
       "conditions": [],
       "raw": "Go to SET_CATEGORY_Q."
     },
     {
-      "from": "END_PROJ_TYPE_Q",
+      "from": "FINISH_PROJ_TYPE_Q",
       "to": "SET_CATEGORY_Q",
       "conditions": [
         "<implicit_next_row>"
@@ -1260,7 +1280,7 @@
       "from": "BRIEF_PROD_DESC_Q",
       "to": "BRIEF_PROJ_OVRVW_Q",
       "conditions": [],
-      "raw": "Capture \"Brief Product Description\" (1017) of no more than 40 characters <FREEFORM>. Go to BRIEF_PROJ_OVRVW_Q."
+      "raw": "Capture \"Brief Product Description\" (1017) of maximum 40 characters (must be alphanumeric and can include dashes and can include spaces) <FREEFORM>. Go to BRIEF_PROJ_OVRVW_Q."
     },
     {
       "from": "BRIEF_PROD_DESC_Q",
@@ -1372,7 +1392,34 @@
       "from": "LIKE_SKU_Q",
       "to": "DECISION_ECOMM_Q",
       "conditions": [],
-      "raw": "Go to DECISION_ECOMM_Q."
+      "raw": "IF \"Like SKU / Reference Material Number\" (1025) is numeric, then Go to DECISION_ECOMM_Q. END."
+    },
+    {
+      "from": "LIKE_SKU_Q",
+      "to": "LIKE_SKU_Q",
+      "conditions": [
+        "KUBIC",
+        "none"
+      ],
+      "raw": "ELSE IF (\"Project Type\" (1014) is 'KUBIC' and \"Like SKU / Reference Material Number\" (1025) is 'none') then Go to LIKE_SKU_Q. END."
+    },
+    {
+      "from": "LIKE_SKU_Q",
+      "to": "LIKE_SKU_Q",
+      "conditions": [
+        "KUBIC",
+        "blank"
+      ],
+      "raw": "ELSE IF (\"Project Type\" (1014) is 'KUBIC' and \"Like SKU / Reference Material Number\" (1025) is 'blank') then Go to LIKE_SKU_Q. END."
+    },
+    {
+      "from": "LIKE_SKU_Q",
+      "to": "DECISION_ECOMM_Q",
+      "conditions": [
+        "none",
+        "blank"
+      ],
+      "raw": "ELSE IF ('none' or 'blank') is selected then \"Like SKU / Reference Material Number\" (1025) is <'<not required>'>. Go to DECISION_ECOMM_Q. END IF."
     },
     {
       "from": "LIKE_SKU_Q",
@@ -1388,7 +1435,7 @@
       "conditions": [
         "ECOMM"
       ],
-      "raw": "If \"Product Type\" (1009) is 'ECOMM' then \"Approved to sell via Ecommerce\" (1026) is <'YES'> and \"Trade Channel\" (1166) is <'ONLINE'>. Go to ONE_CUSTOMER_Q."
+      "raw": "IF \"Product Type\" (1009) is 'ECOMM' then \"Approved to sell via Ecommerce\" (1026) is <'YES'>. Go to ONE_CUSTOMER_Q. END."
     },
     {
       "from": "DECISION_ECOMM_Q",
@@ -1396,7 +1443,7 @@
       "conditions": [
         "DTC Bundle"
       ],
-      "raw": "If \"Product Type\" (1009) is 'DTC Bundle' then \"Approved to sell via Ecommerce\" (1026) is <'YES'> and \"Trade Channel\" (1166) is <'ONLINE'>. Go to ONE_CUSTOMER_Q."
+      "raw": "ELSE IF \"Product Type\" (1009) is 'DTC Bundle' then \"Approved to sell via Ecommerce\" (1026) is <'YES'>. Go to ONE_CUSTOMER_Q. END."
     },
     {
       "from": "DECISION_ECOMM_Q",
@@ -1404,16 +1451,7 @@
       "conditions": [
         "CA - CANADA"
       ],
-      "raw": "If \"Product Country\" (1008) is 'CA - CANADA' then Go to ONE_CUSTOMER_Q."
-    },
-    {
-      "from": "DECISION_ECOMM_Q",
-      "to": "SELL_ECOMM_Q",
-      "conditions": [
-        "CASE",
-        "DISPLAY"
-      ],
-      "raw": "If \"Form Type\" (1007) is 'CASE' or 'DISPLAY' then Go to SELL_ECOMM_Q."
+      "raw": "ELSE IF \"Product Country\" (1008) is 'CA - CANADA' then \"Approved to sell via Ecommerce\" (1026) is <'NO'>. Go to ONE_CUSTOMER_Q.  END."
     },
     {
       "from": "DECISION_ECOMM_Q",
@@ -1421,7 +1459,23 @@
       "conditions": [
         "WIP"
       ],
-      "raw": "If \"Form Type\" (1007) is 'WIP' then Go to AWAY_FROM_HOME_Q."
+      "raw": "ELSE IF \"Form Type\" (1007) is 'WIP' then (\"Approved to sell via Ecommerce\" (1026) is <'NO'> and \"Build SKU Using Existing Package UPCs\" (1032) is <'NO'>). Go to AWAY_FROM_HOME_Q. END."
+    },
+    {
+      "from": "DECISION_ECOMM_Q",
+      "to": "SELL_ECOMM_Q",
+      "conditions": [
+        "CASE"
+      ],
+      "raw": "ELSE IF \"Form Type\" (1007) is 'CASE' then Go to SELL_ECOMM_Q. END."
+    },
+    {
+      "from": "DECISION_ECOMM_Q",
+      "to": "SELL_ECOMM_Q",
+      "conditions": [
+        "DISPLAY"
+      ],
+      "raw": "ELSE IF \"Form Type\" (1007) is 'DISPLAY' then \"Build SKU Using Existing Package UPCs\" (1032) is <'NO'>. Go to SELL_ECOMM_Q. END IF."
     },
     {
       "from": "DECISION_ECOMM_Q",
@@ -1451,7 +1505,7 @@
       "conditions": [
         "YES"
       ],
-      "raw": "If 'YES' is selected then Go to ONE_CUST_NAME_Q."
+      "raw": "IF 'YES' is selected then Go to ONE_CUST_NAME_Q.  END."
     },
     {
       "from": "ONE_CUSTOMER_Q",
@@ -1459,7 +1513,7 @@
       "conditions": [
         "NO"
       ],
-      "raw": "If 'NO' is selected and \"Form Type\" (1007) is 'CASE' then Go to DECISION_VAR_PACK_Q."
+      "raw": "ELSE IF ('NO' is selected and \"Form Type\" (1007) is 'CASE') then Go to DECISION_VAR_PACK_Q.  END."
     },
     {
       "from": "ONE_CUSTOMER_Q",
@@ -1467,7 +1521,7 @@
       "conditions": [
         "NO"
       ],
-      "raw": "If 'NO' is selected and \"Form Type\" (1007) is 'DISPLAY' then Go to AWAY_FROM_HOME_Q."
+      "raw": "ELSE IF ('NO' is selected and \"Form Type\" (1007) is 'DISPLAY') then Go to AWAY_FROM_HOME_Q. END IF."
     },
     {
       "from": "ONE_CUSTOMER_Q",
@@ -1497,7 +1551,7 @@
       "conditions": [
         "DISPLAY"
       ],
-      "raw": "If \"Form Type\" (1007) is 'DISPLAY' then Go to AWAY_FROM_HOME_Q."
+      "raw": "IF \"Form Type\" (1007) is 'DISPLAY' then Go to AWAY_FROM_HOME_Q.  END."
     },
     {
       "from": "INCL_ONE_CUST_MATL_Q",
@@ -1505,7 +1559,7 @@
       "conditions": [
         "CASE"
       ],
-      "raw": "If \"Form Type\" (1007) is 'CASE' then Go to DECISION_VAR_PACK_Q."
+      "raw": "ELSE IF \"Form Type\" (1007) is 'CASE' then Go to DECISION_VAR_PACK_Q. END IF."
     },
     {
       "from": "INCL_ONE_CUST_MATL_Q",
@@ -1517,11 +1571,11 @@
     },
     {
       "from": "DECISION_VAR_PACK_Q",
-      "to": "BUILD_SKU_Q",
+      "to": "CA_DECISION_VAR_PK_Q",
       "conditions": [
-        "Bulk Case"
+        "CA - CANADA"
       ],
-      "raw": "If \"Product Type\" (1009) is 'Bulk Case' then \"Variety Pack\" (1030) is <'NO'> and \"Variety Pack components have UPC Codes\" (1031) is <'NO'>. Go to BUILD_SKU_Q."
+      "raw": "IF (\"Product Country\" (1008) is 'CA - CANADA') then Go to CA_DECISION_VAR_PK_Q. END."
     },
     {
       "from": "DECISION_VAR_PACK_Q",
@@ -1529,25 +1583,15 @@
       "conditions": [
         "Bulk Case Repack/RCP"
       ],
-      "raw": "If \"Product Type\" (1009) is 'Bulk Case Repack/RCP' then Go to VARIETY_PACK_Q."
-    },
-    {
-      "from": "DECISION_VAR_PACK_Q",
-      "to": "VARIETY_PACK_Q",
-      "conditions": [
-        "Club",
-        "Non-traditional"
-      ],
-      "raw": "If \"Product Type\" (1009) is 'Club' and \"Product Subtype\" (1010) is 'Non-traditional' then Go to VARIETY_PACK_Q."
+      "raw": "ELSE IF (\"Product Type\" (1009) is 'Bulk Case Repack/RCP') then Go to VARIETY_PACK_Q.  END."
     },
     {
       "from": "DECISION_VAR_PACK_Q",
       "to": "BUILD_SKU_Q",
       "conditions": [
-        "Club",
-        "Traditional"
+        "Bulk Case"
       ],
-      "raw": "If \"Product Type\" (1009) is 'Club' and \"Product Subtype\" (1010) is 'Traditional' then \"Variety Pack\" (1030) is <'NO'> and \"Variety Pack components have UPC Codes\" (1031) is <'NO'>. Go to BUILD_SKU_Q."
+      "raw": "ELSE IF (\"Product Type\" (1009) is 'Bulk Case') then (\"Variety Pack\" (1030) is <'NO'> and \"Variety Pack components have UPC Codes\" (1031) is <'NO'>). Go to BUILD_SKU_Q.  END."
     },
     {
       "from": "DECISION_VAR_PACK_Q",
@@ -1555,7 +1599,25 @@
       "conditions": [
         "Club Repack/RCP"
       ],
-      "raw": "If \"Product Type\" (1009) is 'Club Repack/RCP' then \"Variety Pack\" (1030) is <'NO'> and \"Variety Pack components have UPC Codes\" (1031) is <'NO'>. Go to BUILD_SKU_Q."
+      "raw": "ELSE IF (\"Product Type\" (1009) is 'Club Repack/RCP') then (\"Variety Pack\" (1030) is <'NO'> and \"Variety Pack components have UPC Codes\" (1031) is <'NO'>). Go to BUILD_SKU_Q. END."
+    },
+    {
+      "from": "DECISION_VAR_PACK_Q",
+      "to": "VARIETY_PACK_Q",
+      "conditions": [
+        "Club",
+        "Non-Traditional"
+      ],
+      "raw": "ELSE IF (\"Product Type\" (1009) is 'Club' and \"Product Subtype\" (1010) is 'Non-Traditional') then Go to VARIETY_PACK_Q.  END."
+    },
+    {
+      "from": "DECISION_VAR_PACK_Q",
+      "to": "BUILD_SKU_Q",
+      "conditions": [
+        "Club",
+        "Traditional 1PKG=1CS"
+      ],
+      "raw": "ELSE IF (\"Product Type\" (1009) is 'Club' and \"Product Subtype\" (1010) is 'Traditional 1PKG=1CS') then (\"Variety Pack\" (1030) is <'NO'> and \"Variety Pack components have UPC Codes\" (1031) is <'NO'>). Go to BUILD_SKU_Q.  END."
     },
     {
       "from": "DECISION_VAR_PACK_Q",
@@ -1563,7 +1625,7 @@
       "conditions": [
         "DTC Bundle"
       ],
-      "raw": "If \"Product Type\" (1009) is 'DTC Bundle' then Go to DTC_VAR_PACK_Q."
+      "raw": "ELSE IF (\"Product Type\" (1009) is 'DTC Bundle') then Go to DTC_VAR_PACK_Q. END."
     },
     {
       "from": "DECISION_VAR_PACK_Q",
@@ -1571,15 +1633,7 @@
       "conditions": [
         "ECOMM"
       ],
-      "raw": "If \"Product Type\" (1009) is 'ECOMM' then Go to VARIETY_PACK_Q."
-    },
-    {
-      "from": "DECISION_VAR_PACK_Q",
-      "to": "VARIETY_PACK_Q",
-      "conditions": [
-        "Single Serve"
-      ],
-      "raw": "If \"Product Type\" (1009) is 'Single Serve' then Go to VARIETY_PACK_Q."
+      "raw": "ELSE IF (\"Product Type\" (1009) is 'ECOMM') then Go to VARIETY_PACK_Q. END."
     },
     {
       "from": "DECISION_VAR_PACK_Q",
@@ -1587,25 +1641,15 @@
       "conditions": [
         "Single Serve Repack/RCP"
       ],
-      "raw": "If \"Product Type\" (1009) is 'Single Serve Repack/RCP' then Go to VARIETY_PACK_Q."
+      "raw": "ELSE IF (\"Product Type\" (1009) is 'Single Serve Repack/RCP') then Go to VARIETY_PACK_Q. END."
     },
     {
       "from": "DECISION_VAR_PACK_Q",
       "to": "VARIETY_PACK_Q",
       "conditions": [
-        "Straight Case",
-        "Pkg with UPC"
+        "Single Serve"
       ],
-      "raw": "If \"Product Type\" (1009) is 'Straight Case' and \"Product Subtype\" (1010) is 'Pkg with UPC' then Go to VARIETY_PACK_Q."
-    },
-    {
-      "from": "DECISION_VAR_PACK_Q",
-      "to": "BUILD_SKU_Q",
-      "conditions": [
-        "Straight Case",
-        "Pkg and Pouch"
-      ],
-      "raw": "If \"Product Type\" (1009) is 'Straight Case' and \"Product Subtype\" (1010) is 'Pkg and Pouch' then \"Variety Pack\" (1030) is <'NO'> and \"Variety Pack components have UPC Codes\" (1031) is <'NO'>. Go to BUILD_SKU_Q."
+      "raw": "ELSE IF (\"Product Type\" (1009) is 'Single Serve') then Go to VARIETY_PACK_Q. END."
     },
     {
       "from": "DECISION_VAR_PACK_Q",
@@ -1613,10 +1657,68 @@
       "conditions": [
         "Straight Case Repack/RCP"
       ],
-      "raw": "If \"Product Type\" (1009) is 'Straight Case Repack/RCP' then Go to VARIETY_PACK_Q."
+      "raw": "ELSE IF (\"Product Type\" (1009) is 'Straight Case Repack/RCP') then Go to VARIETY_PACK_Q. END."
     },
     {
       "from": "DECISION_VAR_PACK_Q",
+      "to": "BUILD_SKU_Q",
+      "conditions": [
+        "Straight Case",
+        "Package and pouch/inner item with UPCs"
+      ],
+      "raw": "ELSE IF (\"Product Type\" (1009) is 'Straight Case' and \"Product Subtype\" (1010) is 'Package and pouch/inner item with UPCs') then (\"Variety Pack\" (1030) is <'NO'> and \"Variety Pack components have UPC Codes\" (1031) is <'NO'>). Go to BUILD_SKU_Q.  END."
+    },
+    {
+      "from": "DECISION_VAR_PACK_Q",
+      "to": "VARIETY_PACK_Q",
+      "conditions": [
+        "Straight Case",
+        "Package with UPC"
+      ],
+      "raw": "ELSE IF (\"Product Type\" (1009) is 'Straight Case' and \"Product Subtype\" (1010) is 'Package with UPC') then Go to VARIETY_PACK_Q.  END IF."
+    },
+    {
+      "from": "DECISION_VAR_PACK_Q",
+      "to": "CA_DECISION_VAR_PK_Q",
+      "conditions": [
+        "<implicit_next_row>"
+      ],
+      "raw": "Implicit next row fallback"
+    },
+    {
+      "from": "CA_DECISION_VAR_PK_Q",
+      "to": "VARIETY_PACK_Q",
+      "conditions": [
+        "Canada Bulk Case"
+      ],
+      "raw": "IF (\"Product Type\" (1009) is 'Canada Bulk Case') then Go to VARIETY_PACK_Q. END."
+    },
+    {
+      "from": "CA_DECISION_VAR_PK_Q",
+      "to": "BUILD_SKU_Q",
+      "conditions": [
+        "Canada Club"
+      ],
+      "raw": "ELSE IF (\"Product Type\" (1009) is 'Canada Club') then (\"Variety Pack\" (1030) is <'NO'> and \"Variety Pack components have UPC Codes\" (1031) is <'NO'>). Go to BUILD_SKU_Q. END."
+    },
+    {
+      "from": "CA_DECISION_VAR_PK_Q",
+      "to": "VARIETY_PACK_Q",
+      "conditions": [
+        "Canada Straight Case"
+      ],
+      "raw": "ELSE IF (\"Product Type\" (1009) is 'Canada Straight Case') then Go to VARIETY_PACK_Q. END."
+    },
+    {
+      "from": "CA_DECISION_VAR_PK_Q",
+      "to": "VARIETY_PACK_Q",
+      "conditions": [
+        "Canada Straight Case Repack/RCP - existing PKG UPC"
+      ],
+      "raw": "ELSE IF (\"Product Type\" (1009) is 'Canada Straight Case Repack/RCP - existing PKG UPC') then Go to VARIETY_PACK_Q. END IF."
+    },
+    {
+      "from": "CA_DECISION_VAR_PK_Q",
       "to": "DTC_VAR_PACK_Q",
       "conditions": [
         "<implicit_next_row>"
@@ -1625,9 +1727,19 @@
     },
     {
       "from": "DTC_VAR_PACK_Q",
-      "to": "VARIETY_PACK_Q",
-      "conditions": [],
-      "raw": "Capture \"Variety Pack\" (1030) is <'NO'>, as a default. Go to VARIETY_PACK_Q."
+      "to": "VP_COMP_UPC_Q",
+      "conditions": [
+        "YES"
+      ],
+      "raw": "IF 'YES' is selected then Go to VP_COMP_UPC_Q.  END."
+    },
+    {
+      "from": "DTC_VAR_PACK_Q",
+      "to": "BUILD_SKU_Q",
+      "conditions": [
+        "NO"
+      ],
+      "raw": "ELSE IF 'NO' is selected then Go to BUILD_SKU_Q. END IF."
     },
     {
       "from": "DTC_VAR_PACK_Q",
@@ -1643,7 +1755,7 @@
       "conditions": [
         "YES"
       ],
-      "raw": "If 'YES' is selected then \"Variety Pack\" is <'YES'>. Go to VP_COMP_UPC_Q."
+      "raw": "IF 'YES' is selected then Go to VP_COMP_UPC_Q.  END."
     },
     {
       "from": "VARIETY_PACK_Q",
@@ -1651,7 +1763,7 @@
       "conditions": [
         "NO"
       ],
-      "raw": "If 'NO' is selected then \"Variety Pack\" is <'NO'>. Go to BUILD_SKU_Q."
+      "raw": "ELSE IF 'NO' is selected then Go to BUILD_SKU_Q. END IF."
     },
     {
       "from": "VARIETY_PACK_Q",
@@ -1677,11 +1789,11 @@
     },
     {
       "from": "BUILD_SKU_Q",
-      "to": "AWAY_FROM_HOME_Q",
+      "to": "CA_BUILD_SKU_Q",
       "conditions": [
-        "Bulk Case"
+        "CA - CANADA"
       ],
-      "raw": "If \"Product Type\" (1009) is 'Bulk Case' then \"Build SKU Using Existing Package UPCs\" (1032) is <'NO'>. Go to AWAY_FROM_HOME_Q."
+      "raw": "IF (\"Product Country\" (1008) is 'CA - CANADA') then Go to CA_BUILD_SKU_Q. END."
     },
     {
       "from": "BUILD_SKU_Q",
@@ -1689,15 +1801,15 @@
       "conditions": [
         "Bulk Case Repack/RCP"
       ],
-      "raw": "If \"Product Type\" (1009) is 'Bulk Case Repack/RCP' then \"Build SKU Using Existing Package UPCs\" (1032) is <'YES'>. Go to AWAY_FROM_HOME_Q."
+      "raw": "ELSE IF (\"Product Type\" (1009) is 'Bulk Case Repack/RCP') then \"Build SKU Using Existing Package UPCs\" (1032) is <'YES'>. Go to AWAY_FROM_HOME_Q. END."
     },
     {
       "from": "BUILD_SKU_Q",
       "to": "AWAY_FROM_HOME_Q",
       "conditions": [
-        "Club"
+        "Bulk Case"
       ],
-      "raw": "If \"Product Type\" (1009) is 'Club' then \"Build SKU Using Existing Package UPCs\" (1032) is <'NO'>. Go to AWAY_FROM_HOME_Q."
+      "raw": "ELSE IF (\"Product Type\" (1009) is 'Bulk Case') then \"Build SKU Using Existing Package UPCs\" (1032) is <'NO'>. Go to AWAY_FROM_HOME_Q. END."
     },
     {
       "from": "BUILD_SKU_Q",
@@ -1705,7 +1817,15 @@
       "conditions": [
         "Club Repack/RCP"
       ],
-      "raw": "If \"Product Type\" (1009) is 'Club Repack/RCP' then \"Build SKU Using Existing Package UPCs\" (1032) is <'YES'>. Go to AWAY_FROM_HOME_Q."
+      "raw": "ELSE IF (\"Product Type\" (1009) is 'Club Repack/RCP') then \"Build SKU Using Existing Package UPCs\" (1032) is <'YES'>. Go to AWAY_FROM_HOME_Q. END."
+    },
+    {
+      "from": "BUILD_SKU_Q",
+      "to": "AWAY_FROM_HOME_Q",
+      "conditions": [
+        "Club"
+      ],
+      "raw": "ELSE IF (\"Product Type\" (1009) is 'Club') then \"Build SKU Using Existing Package UPCs\" (1032) is <'NO'>. Go to AWAY_FROM_HOME_Q. END."
     },
     {
       "from": "BUILD_SKU_Q",
@@ -1713,7 +1833,7 @@
       "conditions": [
         "DTC Bundle"
       ],
-      "raw": "If \"Product Type\" (1009) is 'DTC Bundle' then then \"Build SKU Using Existing Package UPCs\" (1032) is <'NO'>. Go to AWAY_FROM_HOME_Q."
+      "raw": "ELSE IF (\"Product Type\" (1009) is 'DTC Bundle') then \"Build SKU Using Existing Package UPCs\" (1032) is <'NO'>. Go to AWAY_FROM_HOME_Q. END."
     },
     {
       "from": "BUILD_SKU_Q",
@@ -1721,15 +1841,7 @@
       "conditions": [
         "ECOMM"
       ],
-      "raw": "If \"Product Type\" (1009) is 'ECOMM' then \"Build SKU Using Existing Package UPCs\" (1032) is <'NO'>. Go to AWAY_FROM_HOME_Q."
-    },
-    {
-      "from": "BUILD_SKU_Q",
-      "to": "AWAY_FROM_HOME_Q",
-      "conditions": [
-        "Single Serve"
-      ],
-      "raw": "If \"Product Type\" (1009) is 'Single Serve' then \"Build SKU Using Existing Package UPCs\" (1032) is <'NO'>. Go to AWAY_FROM_HOME_Q."
+      "raw": "ELSE IF (\"Product Type\" (1009) is 'ECOMM') then \"Build SKU Using Existing Package UPCs\" (1032) is <'NO'>. Go to AWAY_FROM_HOME_Q. END."
     },
     {
       "from": "BUILD_SKU_Q",
@@ -1737,15 +1849,15 @@
       "conditions": [
         "Single Serve Repack/RCP"
       ],
-      "raw": "If \"Product Type\" (1009) is 'Single Serve Repack/RCP' then \"Build SKU Using Existing Package UPCs\" (1032) is <'YES'>. Go to AWAY_FROM_HOME_Q."
+      "raw": "ELSE IF (\"Product Type\" (1009) is 'Single Serve Repack/RCP') then \"Build SKU Using Existing Package UPCs\" (1032) is <'YES'>. Go to AWAY_FROM_HOME_Q. END."
     },
     {
       "from": "BUILD_SKU_Q",
       "to": "AWAY_FROM_HOME_Q",
       "conditions": [
-        "Straight Case"
+        "Single Serve"
       ],
-      "raw": "If \"Product Type\" (1009) is 'Straight Case' then \"Build SKU Using Existing Package UPCs\" (1032) is <'NO'>. Go to AWAY_FROM_HOME_Q."
+      "raw": "ELSE IF (\"Product Type\" (1009) is 'Single Serve') then \"Build SKU Using Existing Package UPCs\" (1032) is <'NO'>. Go to AWAY_FROM_HOME_Q. END."
     },
     {
       "from": "BUILD_SKU_Q",
@@ -1753,10 +1865,58 @@
       "conditions": [
         "Straight Case Repack/RCP"
       ],
-      "raw": "If \"Product Type\" (1009) is 'Straight Case Repack/RCP' then \"Build SKU Using Existing Package UPCs\" (1032) is <'YES'>. Go to AWAY_FROM_HOME_Q."
+      "raw": "ELSE IF (\"Product Type\" (1009) is 'Straight Case Repack/RCP') then \"Build SKU Using Existing Package UPCs\" (1032) is <'YES'>. Go to AWAY_FROM_HOME_Q. END."
     },
     {
       "from": "BUILD_SKU_Q",
+      "to": "AWAY_FROM_HOME_Q",
+      "conditions": [
+        "Straight Case"
+      ],
+      "raw": "ELSE IF (\"Product Type\" (1009) is 'Straight Case') then \"Build SKU Using Existing Package UPCs\" (1032) is <'NO'>. Go to AWAY_FROM_HOME_Q. END IF."
+    },
+    {
+      "from": "BUILD_SKU_Q",
+      "to": "CA_BUILD_SKU_Q",
+      "conditions": [
+        "<implicit_next_row>"
+      ],
+      "raw": "Implicit next row fallback"
+    },
+    {
+      "from": "CA_BUILD_SKU_Q",
+      "to": "AWAY_FROM_HOME_Q",
+      "conditions": [
+        "Canada Bulk Case"
+      ],
+      "raw": "IF (\"Product Type\" (1009) is 'Canada Bulk Case') then \"Build SKU Using Existing Package UPCs\" (1032) is <'NO'>. Go to AWAY_FROM_HOME_Q. END."
+    },
+    {
+      "from": "CA_BUILD_SKU_Q",
+      "to": "AWAY_FROM_HOME_Q",
+      "conditions": [
+        "Canada Club"
+      ],
+      "raw": "ELSE IF (\"Product Type\" (1009) is 'Canada Club') then \"Build SKU Using Existing Package UPCs\" (1032) is <'NO'>. Go to AWAY_FROM_HOME_Q. END."
+    },
+    {
+      "from": "CA_BUILD_SKU_Q",
+      "to": "AWAY_FROM_HOME_Q",
+      "conditions": [
+        "Canada Straight Case Repack/RCP - existing PKG UPC"
+      ],
+      "raw": "ELSE IF (\"Product Type\" (1009) is 'Canada Straight Case Repack/RCP - existing PKG UPC') then \"Build SKU Using Existing Package UPCs\" (1032) is <'YES'>. Go to AWAY_FROM_HOME_Q. END."
+    },
+    {
+      "from": "CA_BUILD_SKU_Q",
+      "to": "AWAY_FROM_HOME_Q",
+      "conditions": [
+        "Canada Straight Case"
+      ],
+      "raw": "ELSE IF (\"Product Type\" (1009) is 'Canada Straight Case') then \"Build SKU Using Existing Package UPCs\" (1032) is <'NO'>. Go to AWAY_FROM_HOME_Q. END IF."
+    },
+    {
+      "from": "CA_BUILD_SKU_Q",
       "to": "AWAY_FROM_HOME_Q",
       "conditions": [
         "<implicit_next_row>"
@@ -1783,7 +1943,7 @@
       "conditions": [
         "DISPLAY"
       ],
-      "raw": "If \"Form Type\" (1007) is 'DISPLAY' then Go to DATASYNC_Q."
+      "raw": "IF \"Form Type\" (1007) is 'DISPLAY' then (\"Build SKU Using Existing Export UPCs\" (1035) is <'NO'> and \"List Existing Export UPC Codes\" (1036) is <'<not required>'>). Go to DATASYNC_Q.  END."
     },
     {
       "from": "EXPORT_Q",
@@ -1791,7 +1951,7 @@
       "conditions": [
         "YES"
       ],
-      "raw": "If 'YES' then Go to BUILD_SKU_EXPORT_Q."
+      "raw": "ELSE IF 'YES' is selected then Go to BUILD_SKU_EXPORT_Q.  END."
     },
     {
       "from": "EXPORT_Q",
@@ -1799,7 +1959,7 @@
       "conditions": [
         "NO"
       ],
-      "raw": "If 'NO' then Go to PRIV_LABEL_Q."
+      "raw": "ELSE IF 'NO' is selected then (\"Build SKU Using Existing Export UPCs\" (1035) is <'NO'> and \"List Existing Export UPC Codes\" (1036) is <'<not required>'>). Go to PRIV_LABEL_Q. END IF."
     },
     {
       "from": "EXPORT_Q",
@@ -1815,7 +1975,7 @@
       "conditions": [
         "YES"
       ],
-      "raw": "If 'YES' then Go to LIST_EXPORT_UPC_Q."
+      "raw": "IF 'YES' is selected then Go to LIST_EXPORT_UPC_Q.  END."
     },
     {
       "from": "BUILD_SKU_EXPORT_Q",
@@ -1823,7 +1983,7 @@
       "conditions": [
         "NO"
       ],
-      "raw": "If 'NO' then Go to PRIV_LABEL_Q."
+      "raw": "ELSE IF 'NO' is selected then Go to PRIV_LABEL_Q. END IF."
     },
     {
       "from": "BUILD_SKU_EXPORT_Q",
@@ -1853,7 +2013,7 @@
       "conditions": [
         "YES"
       ],
-      "raw": "If 'YES' then Go to PRIV_LABEL_NAME_Q."
+      "raw": "IF 'YES' is selected then Go to PRIV_LABEL_NAME_Q.  END."
     },
     {
       "from": "PRIV_LABEL_Q",
@@ -1861,7 +2021,7 @@
       "conditions": [
         "NO"
       ],
-      "raw": "If 'NO' then \"Data Sync(GDSN)\" (1041) is <'YES'>. Go to DATASYNC_Q."
+      "raw": "ELSE IF 'NO' is selected then Go to DATASYNC_Q. END IF."
     },
     {
       "from": "PRIV_LABEL_Q",
@@ -1891,7 +2051,7 @@
       "conditions": [
         "YES"
       ],
-      "raw": "If 'YES' then Go to LIST_PRIV_UPC_Q."
+      "raw": "IF 'YES' is selected then Go to LIST_PRIV_UPC_Q.  END."
     },
     {
       "from": "BUILD_SKU_PRIV_Q",
@@ -1899,7 +2059,7 @@
       "conditions": [
         "NO"
       ],
-      "raw": "If 'NO' then \"Data Sync(GDSN)\" (1041) is <'YES'>. Go to DATASYNC_Q."
+      "raw": "ELSE IF 'NO' is selected then Go to DATASYNC_Q. END IF."
     },
     {
       "from": "BUILD_SKU_PRIV_Q",
@@ -1913,7 +2073,7 @@
       "from": "LIST_PRIV_UPC_Q",
       "to": "DATASYNC_Q",
       "conditions": [],
-      "raw": "Capture \"List Existing Private UPCs\" (1040) <FREEFORM>. Set \"Data Sync(GDSN)\" (1041) is <'YES'>. Go to DATASYNC_Q."
+      "raw": "Capture \"List Existing Private UPCs\" (1040) <FREEFORM>. Go to DATASYNC_Q."
     },
     {
       "from": "LIST_PRIV_UPC_Q",
@@ -1927,7 +2087,7 @@
       "from": "DATASYNC_Q",
       "to": "FERT_WIP_FALB_Q",
       "conditions": [],
-      "raw": "Default \"Data Sync(GDSN)\" (1041) to <'YES'>. Go to FERT_WIP_FALB_Q."
+      "raw": "Capture \"Data Sync(GDSN)\" (1041), either <'Yes'> or <'No'>. Go to FERT_WIP_FALB_Q."
     },
     {
       "from": "DATASYNC_Q",
@@ -1955,7 +2115,7 @@
       "from": "MATL_PREFIX_DESC_Q",
       "to": "COMPRESS_UPC_Q",
       "conditions": [],
-      "raw": "Capture \"Material Prefix Description\" (1042). Go to COMPRESS_UPC_Q."
+      "raw": "Capture \"Material Prefix Description\" (1042). Go to COMPRESS_UPC_Q. END."
     },
     {
       "from": "MATL_PREFIX_DESC_Q",
@@ -1968,160 +2128,132 @@
     {
       "from": "COMPRESS_UPC_Q",
       "to": "DECISION_EXIST_PRTD_Q",
+      "conditions": [],
+      "raw": "Capture \"Is a Compressed UPC Required for the Components\" (1043), either <'NO'>, <'POUCH'>, <'PACKAGE'>, or <'BOTH'>. Go to DECISION_EXIST_PRTD_Q."
+    },
+    {
+      "from": "COMPRESS_UPC_Q",
+      "to": "DECISION_EXIST_PRTD_Q",
+      "conditions": [
+        "<implicit_next_row>"
+      ],
+      "raw": "Implicit next row fallback"
+    },
+    {
+      "from": "DECISION_EXIST_PRTD_Q",
+      "to": "POUCH_UPC_Q",
+      "conditions": [
+        "NO",
+        "Single Serve"
+      ],
+      "raw": "IF (\"Build SKU Using Existing Package UPCs\" (1032) is 'NO' and \"Product Type\" (1009) is 'Single Serve') then Go to POUCH_UPC_Q. END."
+    },
+    {
+      "from": "DECISION_EXIST_PRTD_Q",
+      "to": "POUCH_UPC_Q",
+      "conditions": [
+        "NO",
+        "Straight Case",
+        "Package and pouch/inner item with UPCs"
+      ],
+      "raw": "ELSE IF (\"Build SKU Using Existing Package UPCs\" (1032) is 'NO' and \"Product Type\" (1009) is 'Straight Case' and \"Product Subtype\" (1010) is 'Package and pouch/inner item with UPCs') then Go to POUCH_UPC_Q.  END."
+    },
+    {
+      "from": "DECISION_EXIST_PRTD_Q",
+      "to": "POUCH_UPC_Q",
+      "conditions": [
+        "NO",
+        "Canada Straight Case",
+        "Package and pouch/inner item with UPCs"
+      ],
+      "raw": "ELSE IF (\"Build SKU Using Existing Package UPCs\" (1032) is 'NO' and \"Product Type\" (1009) is 'Canada Straight Case' and \"Product Subtype\" (1010) is 'Package and pouch/inner item with UPCs') then Go to POUCH_UPC_Q.  END."
+    },
+    {
+      "from": "DECISION_EXIST_PRTD_Q",
+      "to": "FINISH_EXIST_PRTD_Q",
       "conditions": [
         "NO"
       ],
-      "raw": "If 'NO' then \"SAP Classification field PACKAGE BAR CODE TYPE\" is <'UPC_A'> and \"SAP Classification field POUCH BAR CODE TYPE\" is <'UPC_A'>. Go to DECISION_EXIST_PRTD_Q."
+      "raw": "ELSE IF (\"Build SKU Using Existing Package UPCs\" (1032) is 'NO') then Go to FINISH_EXIST_PRTD_Q. END."
     },
     {
-      "from": "COMPRESS_UPC_Q",
-      "to": "DECISION_EXIST_PRTD_Q",
+      "from": "DECISION_EXIST_PRTD_Q",
+      "to": "PACKAGE_UPC_Q",
       "conditions": [
-        "POUCH"
+        "YES"
       ],
-      "raw": "If 'POUCH' then \"SAP Classification field PACKAGE BAR CODE TYPE\" is <'UPC_A'> and \"SAP Classification field POUCH BAR CODE TYPE\" is <'UPC_E'>. Go to DECISION_EXIST_PRTD_Q."
+      "raw": "ELSE IF (\"Build SKU Using Existing Package UPCs\" (1032) is 'YES') then Go to PACKAGE_UPC_Q. END IF."
     },
     {
-      "from": "COMPRESS_UPC_Q",
-      "to": "DECISION_EXIST_PRTD_Q",
-      "conditions": [
-        "PACKAGE"
-      ],
-      "raw": "If 'PACKAGE' then \"SAP Classification field PACKAGE BAR CODE TYPE\" is <'UPC_E'> and \"SAP Classification field POUCH BAR CODE TYPE\" is <'UPC_A'>. Go to DECISION_EXIST_PRTD_Q."
-    },
-    {
-      "from": "COMPRESS_UPC_Q",
-      "to": "DECISION_EXIST_PRTD_Q",
-      "conditions": [
-        "BOTH"
-      ],
-      "raw": "If 'BOTH' then \"SAP Classification field PACKAGE BAR CODE TYPE\" is <'UPC_E'> and \"SAP Classification field POUCH BAR CODE TYPE\" is <'UPC_E'>. Go to DECISION_EXIST_PRTD_Q."
-    },
-    {
-      "from": "COMPRESS_UPC_Q",
-      "to": "DECISION_EXIST_PRTD_Q",
+      "from": "DECISION_EXIST_PRTD_Q",
+      "to": "PACKAGE_UPC_Q",
       "conditions": [
         "<implicit_next_row>"
       ],
       "raw": "Implicit next row fallback"
     },
     {
-      "from": "DECISION_EXIST_PRTD_Q",
-      "to": "UNIQUE_UPC_Q",
-      "conditions": [
-        "Bulk Case"
-      ],
-      "raw": "If \"Product Type\" (1009) is 'Bulk Case' then Go to UNIQUE_UPC_Q."
+      "from": "PACKAGE_UPC_Q",
+      "to": "PACKAGE_K_NUM_Q",
+      "conditions": [],
+      "raw": "Capture \"Package UPC Code\" (1044) <FREEFORM>. Go to PACKAGE_K_NUM_Q."
     },
     {
-      "from": "DECISION_EXIST_PRTD_Q",
-      "to": "PACKAGE_UPC_Q",
+      "from": "PACKAGE_UPC_Q",
+      "to": "PACKAGE_K_NUM_Q",
       "conditions": [
-        "Bulk Case Repack/RCP"
+        "<implicit_next_row>"
       ],
-      "raw": "If \"Product Type\" (1009) is 'Bulk Case Repack/RCP' then Go to PACKAGE_UPC_Q."
+      "raw": "Implicit next row fallback"
     },
     {
-      "from": "DECISION_EXIST_PRTD_Q",
-      "to": "UNIQUE_UPC_Q",
-      "conditions": [
-        "Club"
-      ],
-      "raw": "If \"Product Type\" (1009) is 'Club' then Go to UNIQUE_UPC_Q."
+      "from": "PACKAGE_K_NUM_Q",
+      "to": "DECISION_POUCH_Q",
+      "conditions": [],
+      "raw": "Capture \"Package K Number\" (1045) <FREEFORM>. Go to DECISION_POUCH_Q."
     },
     {
-      "from": "DECISION_EXIST_PRTD_Q",
-      "to": "PACKAGE_UPC_Q",
+      "from": "PACKAGE_K_NUM_Q",
+      "to": "DECISION_POUCH_Q",
       "conditions": [
-        "Club Repack/RCP"
+        "<implicit_next_row>"
       ],
-      "raw": "If \"Product Type\" (1009) is 'Club Repack/RCP' then Go to PACKAGE_UPC_Q."
+      "raw": "Implicit next row fallback"
     },
     {
-      "from": "DECISION_EXIST_PRTD_Q",
-      "to": "UNIQUE_UPC_Q",
-      "conditions": [
-        "DTC Bundle"
-      ],
-      "raw": "If \"Product Type\" (1009) is 'DTC Bundle' then Go to UNIQUE_UPC_Q."
-    },
-    {
-      "from": "DECISION_EXIST_PRTD_Q",
-      "to": "UNIQUE_UPC_Q",
-      "conditions": [
-        "ECOMM"
-      ],
-      "raw": "If \"Product Type\" (1009) is 'ECOMM' then Go to UNIQUE_UPC_Q."
-    },
-    {
-      "from": "DECISION_EXIST_PRTD_Q",
+      "from": "DECISION_POUCH_Q",
       "to": "POUCH_UPC_Q",
-      "conditions": [
-        "Single Serve"
-      ],
-      "raw": "If \"Product Type\" (1009) is 'Single Serve' then Go to POUCH_UPC_Q."
-    },
-    {
-      "from": "DECISION_EXIST_PRTD_Q",
-      "to": "PACKAGE_UPC_Q",
       "conditions": [
         "Single Serve Repack/RCP"
       ],
-      "raw": "If \"Product Type\" (1009) is 'Single Serve Repack/RCP' then Go to PACKAGE_UPC_Q."
+      "raw": "IF (\"Product Type\" (1009) is 'Single Serve Repack/RCP') then Go to POUCH_UPC_Q. END."
     },
     {
-      "from": "DECISION_EXIST_PRTD_Q",
+      "from": "DECISION_POUCH_Q",
       "to": "POUCH_UPC_Q",
       "conditions": [
-        "Straight Case",
-        "Pkg and Pouch"
+        "Straight Case Repack/RCP",
+        "Package and pouch/inner item with UPCs"
       ],
-      "raw": "If \"Product Type\" (1009) is 'Straight Case' and Product Subtype (1010) is 'Pkg and Pouch' then Go to POUCH_UPC_Q."
+      "raw": "ELSE IF (\"Product Type\" (1009) is 'Straight Case Repack/RCP' and \"Product Subtype\" (1010) is 'Package and pouch/inner item with UPCs') then Go to POUCH_UPC_Q. END."
     },
     {
-      "from": "DECISION_EXIST_PRTD_Q",
-      "to": "PACKAGE_UPC_Q",
+      "from": "DECISION_POUCH_Q",
+      "to": "POUCH_UPC_Q",
       "conditions": [
-        "Straight Case Repack/RCP"
+        "Canada Straight Case Repack/RCP - existing PKG UPC",
+        "Package and pouch/inner item with UPCs"
       ],
-      "raw": "If \"Product Type\" (1009) is 'Straight Case Repack/RCP' then Go to PACKAGE_UPC_Q."
+      "raw": "ELSE IF (\"Product Type\" (1009) is 'Canada Straight Case Repack/RCP - existing PKG UPC' and \"Product Subtype\" (1010) is 'Package and pouch/inner item with UPCs') then Go to POUCH_UPC_Q. END."
     },
     {
-      "from": "DECISION_EXIST_PRTD_Q",
-      "to": "PACKAGE_UPC_Q",
-      "conditions": [
-        "<implicit_next_row>"
-      ],
-      "raw": "Implicit next row fallback"
-    },
-    {
-      "from": "PACKAGE_UPC_Q",
-      "to": "PACKAGE_K_NUM_Q",
-      "conditions": [],
-      "raw": "Capture \"Package UPC Code\" (1044) <FREEFORM> then Go to PACKAGE_K_NUM_Q."
-    },
-    {
-      "from": "PACKAGE_UPC_Q",
-      "to": "PACKAGE_K_NUM_Q",
-      "conditions": [
-        "<implicit_next_row>"
-      ],
-      "raw": "Implicit next row fallback"
-    },
-    {
-      "from": "PACKAGE_K_NUM_Q",
+      "from": "DECISION_POUCH_Q",
       "to": "LIST_UPC_CODES_Q",
       "conditions": [],
-      "raw": "Capture \"Package K Number\" (1045) <FREEFORM> then Go to LIST_UPC_CODES_Q."
+      "raw": "ELSE Go to LIST_UPC_CODES_Q. END IF."
     },
     {
-      "from": "PACKAGE_K_NUM_Q",
-      "to": "POUCH_UPC_Q",
-      "conditions": [],
-      "raw": "Capture \"Package K Number\" (1045) <FREEFORM> then Go to POUCH_UPC_Q."
-    },
-    {
-      "from": "PACKAGE_K_NUM_Q",
+      "from": "DECISION_POUCH_Q",
       "to": "POUCH_UPC_Q",
       "conditions": [
         "<implicit_next_row>"
@@ -2158,40 +2290,38 @@
     },
     {
       "from": "DECISION_UPC_CODES_Q",
-      "to": "UNIQUE_UPC_Q",
+      "to": "FINISH_EXIST_PRTD_Q",
       "conditions": [
+        "NO",
         "Single Serve"
       ],
-      "raw": "If \"Product Type\" (1009) is 'Single Serve' then Go to UNIQUE_UPC_Q."
+      "raw": "IF (\"Build SKU Using Existing Package UPCs\" (1032) is 'NO' and \"Product Type\" (1009) is 'Single Serve') then Go to FINISH_EXIST_PRTD_Q. END."
     },
     {
       "from": "DECISION_UPC_CODES_Q",
-      "to": "SALES_SAMPLE_Q",
+      "to": "FINISH_EXIST_PRTD_Q",
       "conditions": [
+        "NO",
         "Straight Case",
-        "Pkg and Pouch",
-        "US - United States"
+        "Package and pouch/inner item with UPCs"
       ],
-      "raw": "If \"Product Type\" (1009) is 'Straight Case' and \"Product Subtype\" (1010) is 'Pkg and Pouch' and \"Product Country\" is 'US - United States' then Go to SALES_SAMPLE_Q."
+      "raw": "ELSE IF (\"Build SKU Using Existing Package UPCs\" (1032) is 'NO' and \"Product Type\" (1009) is 'Straight Case' and \"Product Subtype\" (1010) is 'Package and pouch/inner item with UPCs') then Go to FINISH_EXIST_PRTD_Q.  END."
     },
     {
       "from": "DECISION_UPC_CODES_Q",
-      "to": "UNIQUE_UPC_Q",
+      "to": "FINISH_EXIST_PRTD_Q",
       "conditions": [
-        "Straight Case",
-        "Pkg and Pouch",
-        "US - United States"
+        "NO",
+        "Canada Straight Case",
+        "Package and pouch/inner item with UPCs"
       ],
-      "raw": "If \"Product Type\" (1009) is 'Straight Case' and \"Product Subtype\" (1010) is 'Pkg and Pouch' and \"Product Country\" is NOT 'US - United States' then Go to UNIQUE_UPC_Q."
+      "raw": "ELSE IF (\"Build SKU Using Existing Package UPCs\" (1032) is 'NO' and \"Product Type\" (1009) is 'Canada Straight Case' and \"Product Subtype\" (1010) is 'Package and pouch/inner item with UPCs') then Go to FINISH_EXIST_PRTD_Q.  END."
     },
     {
       "from": "DECISION_UPC_CODES_Q",
       "to": "LIST_UPC_CODES_Q",
-      "conditions": [
-        "Straight Case Repack/RCP",
-        "Pkg and Pouch"
-      ],
-      "raw": "If \"Product Type\" (1009) is 'Straight Case Repack/RCP' and \"Product Subtype\" (1010) is 'Pkg and Pouch' then Go to LIST_UPC_CODES_Q."
+      "conditions": [],
+      "raw": "ELSE Go to LIST_UPC_CODES_Q. END IF."
     },
     {
       "from": "DECISION_UPC_CODES_Q",
@@ -2205,7 +2335,7 @@
       "from": "LIST_UPC_CODES_Q",
       "to": "COMP_UPC_EXIST_Q",
       "conditions": [],
-      "raw": "Capture \"List UPC Codes If Already Assigned\" (1048) <FREEFORM>. Set \"Compressed UPC Existing\" to <'NO'>. Go to COMP_UPC_EXIST_Q."
+      "raw": "Go to COMP_UPC_EXIST_Q. END."
     },
     {
       "from": "LIST_UPC_CODES_Q",
@@ -2217,40 +2347,81 @@
     },
     {
       "from": "COMP_UPC_EXIST_Q",
-      "to": "UNIQUE_UPC_Q",
+      "to": "FINISH_EXIST_PRTD_Q",
       "conditions": [],
-      "raw": "Capture \"Compressed UPC Existing\" (1049), either <'NO'>, <'POUCH'>, <'PACKAGE'>, or <'BOTH'>. Go to UNIQUE_UPC_Q."
+      "raw": "Capture \"Compressed UPC Existing\" (1049), either <'NO'>, <'POUCH'>, <'PACKAGE'>, or <'BOTH'>. Go to FINISH_EXIST_PRTD_Q."
     },
     {
       "from": "COMP_UPC_EXIST_Q",
+      "to": "FINISH_EXIST_PRTD_Q",
+      "conditions": [
+        "<implicit_next_row>"
+      ],
+      "raw": "Implicit next row fallback"
+    },
+    {
+      "from": "FINISH_EXIST_PRTD_Q",
+      "to": "LIST_EXIST_K_NUM_Q",
+      "conditions": [
+        "CA - Canada"
+      ],
+      "raw": "IF (\"Product Country\" (1008) is 'CA - Canada') then Go to LIST_EXIST_K_NUM_Q. END."
+    },
+    {
+      "from": "FINISH_EXIST_PRTD_Q",
+      "to": "LIST_EXIST_K_NUM_Q",
+      "conditions": [
+        "LA - Latin America"
+      ],
+      "raw": "ELSE IF (\"Product Country\" (1008) is 'LA - Latin America') then Go to LIST_EXIST_K_NUM_Q. END."
+    },
+    {
+      "from": "FINISH_EXIST_PRTD_Q",
+      "to": "LIST_EXIST_K_NUM_Q",
+      "conditions": [
+        "EU - Europe"
+      ],
+      "raw": "ELSE IF (\"Product Country\" (1008) is 'EU - Europe') then Go to LIST_EXIST_K_NUM_Q. END."
+    },
+    {
+      "from": "FINISH_EXIST_PRTD_Q",
+      "to": "LIST_EXIST_K_NUM_Q",
+      "conditions": [
+        "AMEA - Asia-Pacific, Middle East, Africa"
+      ],
+      "raw": "ELSE IF (\"Product Country\" (1008) is 'AMEA - Asia-Pacific, Middle East, Africa') then Go to LIST_EXIST_K_NUM_Q. END."
+    },
+    {
+      "from": "FINISH_EXIST_PRTD_Q",
       "to": "SALES_SAMPLE_Q",
       "conditions": [
-        "<implicit_next_row>"
+        "US - United States",
+        "Straight Case"
       ],
-      "raw": "Implicit next row fallback"
+      "raw": "ELSE IF (\"Product Country\" (1008) is 'US - United States' and \"Product Type\" (1009) is 'Straight Case') then Go to SALES_SAMPLE_Q. END."
     },
     {
-      "from": "SALES_SAMPLE_Q",
-      "to": "UNIQUE_UPC_Q",
-      "conditions": [],
-      "raw": "Capture \"Sale Samples may be needed\" (1050), either <'Yes'> or <'No'>. Go to UNIQUE_UPC_Q."
-    },
-    {
-      "from": "SALES_SAMPLE_Q",
-      "to": "UNIQUE_UPC_Q",
-      "conditions": [
-        "<implicit_next_row>"
-      ],
-      "raw": "Implicit next row fallback"
-    },
-    {
-      "from": "UNIQUE_UPC_Q",
+      "from": "FINISH_EXIST_PRTD_Q",
       "to": "LIST_EXIST_K_NUM_Q",
       "conditions": [],
-      "raw": "Go to LIST_EXIST_K_NUM_Q."
+      "raw": "ELSE Go to LIST_EXIST_K_NUM_Q. END IF."
     },
     {
-      "from": "UNIQUE_UPC_Q",
+      "from": "FINISH_EXIST_PRTD_Q",
+      "to": "SALES_SAMPLE_Q",
+      "conditions": [
+        "<implicit_next_row>"
+      ],
+      "raw": "Implicit next row fallback"
+    },
+    {
+      "from": "SALES_SAMPLE_Q",
+      "to": "LIST_EXIST_K_NUM_Q",
+      "conditions": [],
+      "raw": "Capture \"Sale Samples may be needed\" (1050), either <'Yes'> or <'No'>. Go to LIST_EXIST_K_NUM_Q."
+    },
+    {
+      "from": "SALES_SAMPLE_Q",
       "to": "LIST_EXIST_K_NUM_Q",
       "conditions": [
         "<implicit_next_row>"
@@ -2261,7 +2432,7 @@
       "from": "LIST_EXIST_K_NUM_Q",
       "to": "ADDTNL_PKG_LAUNCH_Q",
       "conditions": [],
-      "raw": "Capture \"List any existing Knumbers that will be used\" (1052) <FREEFORM>. Go to ADDTNL_PKG_LAUNCH_Q."
+      "raw": "Go to ADDTNL_PKG_LAUNCH_Q. END."
     },
     {
       "from": "LIST_EXIST_K_NUM_Q",
@@ -2273,9 +2444,9 @@
     },
     {
       "from": "ADDTNL_PKG_LAUNCH_Q",
-      "to": "END_REQ_INITIATE_Q",
+      "to": "FINISH_REQ_INITIATE_Q",
       "conditions": [],
-      "raw": "Capture \"Additional Packaging for Launch\" (1053). Multiple selections possible. Go to END_REQ_INITIATE_Q."
+      "raw": "Capture \"Additional Packaging for Launch\" (1053). Multiple selections possible. Go to FINISH_REQ_INITIATE_Q."
     },
     {
       "from": "ADDTNL_PKG_LAUNCH_Q",
@@ -2287,13 +2458,13 @@
     },
     {
       "from": "UNSURE_Q",
-      "to": "END_REQ_INITIATE_Q",
+      "to": "FINISH_REQ_INITIATE_Q",
       "conditions": [],
-      "raw": "Go to END_REQ_INITIATE_Q."
+      "raw": "Go to FINISH_REQ_INITIATE_Q."
     },
     {
       "from": "UNSURE_Q",
-      "to": "END_REQ_INITIATE_Q",
+      "to": "FINISH_REQ_INITIATE_Q",
       "conditions": [
         "<implicit_next_row>"
       ],

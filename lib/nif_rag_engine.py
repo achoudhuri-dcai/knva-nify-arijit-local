@@ -72,7 +72,7 @@ def _extract_goto_target(line: str) -> Optional[str]:
 
 def _extract_condition_tokens(line: str) -> Tuple[List[str], List[str]]:
     line_text = _safe_text(line)
-    if not line_text.lower().startswith("if "):
+    if not re.match(r"(?i)^\s*(?:else\s+)?if\b", line_text):
         return [], []
 
     prefix = line_text
@@ -120,12 +120,24 @@ def _extract_instruction_choice_values(line: str) -> List[str]:
     if not line_text:
         return []
 
-    literals = [_safe_text(x) for x in re.findall(r"<\s*'([^']+)'\s*>", line_text)]
+    # Only treat literals in the conditional prefix as user-selectable choices.
+    # Values in assignment clauses (after THEN) are usually target field values,
+    # e.g. Form Type = CASE, and should not become displayed options.
+    prefix = line_text
+    selected_match = re.search(r"\bselected\b", line_text, flags=re.IGNORECASE)
+    if selected_match:
+        prefix = line_text[: selected_match.start()]
+    else:
+        then_match = re.search(r"\bthen\b", line_text, flags=re.IGNORECASE)
+        if then_match:
+            prefix = line_text[: then_match.start()]
+
+    literals = [_safe_text(x) for x in re.findall(r"<\s*'([^']+)'\s*>", prefix)]
     literals = [x for x in literals if x]
     if len(literals) < 2:
         return []
 
-    line_norm = _normalize_text(line_text)
+    line_norm = _normalize_text(prefix)
     # Treat as explicit choices only when wording indicates alternatives.
     if "either" not in line_norm and " or " not in f" {line_norm} ":
         return []
@@ -230,6 +242,7 @@ def _build_rule_card(
     lines: List[InstructionLine] = []
     dropdown_refs_agg: List[str] = []
     option_aliases: Dict[str, List[str]] = {}
+    condition_display_options: List[str] = []
 
     for line in instruction_lines_raw:
         line_refs = _extract_reference_list_names(line)
@@ -253,6 +266,8 @@ def _build_rule_card(
         if cond_raw:
             display = _safe_text(cond_raw[0])
             if display:
+                if display not in condition_display_options:
+                    condition_display_options.append(display)
                 existing = option_aliases.get(display, [])
                 merged = existing + cond_raw
                 deduped = []
@@ -289,22 +304,44 @@ def _build_rule_card(
                     options.append(value_text)
                     option_aliases[value_text] = [value_text]
     else:
-        # Fallback: parse inline options directly from question sentence.
-        for parsed_opt in _extract_inline_question_options(question):
-            existing = option_aliases.get(parsed_opt, [])
-            merged = existing + [parsed_opt]
-            deduped = []
-            seen = set()
-            for item in merged:
-                key = _normalize_text(item)
-                if key and key not in seen:
-                    seen.add(key)
-                    deduped.append(_safe_text(item))
-            option_aliases[parsed_opt] = deduped
+        inline_options = list(condition_display_options) if condition_display_options else _extract_inline_question_options(question)
+        if inline_options:
+            # Prefer concise display options from the question text and map
+            # aliases from condition tokens for robust matching.
+            alias_snapshot = dict(option_aliases)
+            for parsed_opt in inline_options:
+                disp = _safe_text(parsed_opt)
+                if not disp:
+                    continue
+                disp_norm = _normalize_text(disp)
+                aliases = [disp]
 
-        for display in option_aliases:
-            if display not in options:
-                options.append(display)
+                for alias_key, alias_vals in alias_snapshot.items():
+                    alias_norm = _normalize_text(alias_key)
+                    if not alias_norm:
+                        continue
+                    if (
+                        alias_norm == disp_norm
+                        or alias_norm in disp_norm
+                        or disp_norm in alias_norm
+                    ):
+                        aliases.append(alias_key)
+                        aliases.extend([_safe_text(v) for v in alias_vals if _safe_text(v)])
+
+                deduped = []
+                seen = set()
+                for item in aliases:
+                    key = _normalize_text(item)
+                    if key and key not in seen:
+                        seen.add(key)
+                        deduped.append(_safe_text(item))
+                option_aliases[disp] = deduped
+                if disp not in options:
+                    options.append(disp)
+        else:
+            for display in option_aliases:
+                if display not in options:
+                    options.append(display)
 
     return RuleCard(
         question_id=question_id,
@@ -1011,6 +1048,10 @@ def run_turn(
             "session_state": state,
             "events": events,
             "retrieval_hits": [],
+            "current_question_id": "",
+            "current_options": [],
+            "answer_matched": True,
+            "needs_clarification": False,
         }
 
     current_card = pack.rule_by_id[current_qid]
@@ -1024,6 +1065,10 @@ def run_turn(
             "session_state": state,
             "events": events,
             "retrieval_hits": [],
+            "current_question_id": current_qid,
+            "current_options": list(current_card.options or []),
+            "answer_matched": True,
+            "needs_clarification": False,
         }
 
     # Clarification request keeps current question pinned and adds RAG context.
@@ -1057,6 +1102,10 @@ def run_turn(
             "session_state": state,
             "events": events,
             "retrieval_hits": hits,
+            "current_question_id": current_qid,
+            "current_options": list(current_card.options or []),
+            "answer_matched": True,
+            "needs_clarification": False,
         }
 
     if _is_back_command(input_norm):
@@ -1070,6 +1119,10 @@ def run_turn(
             "session_state": state,
             "events": events,
             "retrieval_hits": [],
+            "current_question_id": prev_qid,
+            "current_options": list(prev_card.options or []),
+            "answer_matched": True,
+            "needs_clarification": False,
         }
 
     resolved_answer, matched = _resolve_answer(current_card, input_text)
@@ -1085,6 +1138,10 @@ def run_turn(
             "session_state": state,
             "events": events,
             "retrieval_hits": [],
+            "current_question_id": current_qid,
+            "current_options": list(current_card.options or []),
+            "answer_matched": False,
+            "needs_clarification": True,
         }
 
     selected_lines = _select_lines_for_answer(current_card, resolved_answer=resolved_answer)
@@ -1135,6 +1192,10 @@ def run_turn(
             "session_state": state,
             "events": events,
             "retrieval_hits": [],
+            "current_question_id": "",
+            "current_options": [],
+            "answer_matched": True,
+            "needs_clarification": False,
         }
 
     next_card = pack.rule_by_id.get(next_qid)
@@ -1148,6 +1209,10 @@ def run_turn(
             "session_state": state,
             "events": events,
             "retrieval_hits": [],
+            "current_question_id": next_qid,
+            "current_options": [],
+            "answer_matched": True,
+            "needs_clarification": False,
         }
 
     response = (
@@ -1160,4 +1225,8 @@ def run_turn(
         "session_state": state,
         "events": events,
         "retrieval_hits": [],
+        "current_question_id": next_qid,
+        "current_options": list(next_card.options or []),
+        "answer_matched": True,
+        "needs_clarification": False,
     }

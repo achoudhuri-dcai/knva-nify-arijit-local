@@ -1,1 +1,143 @@
-{"term": "x", "definition": "y"}
+{"term": "0200 BOM", "definition": "This BOM setup is required for US Variety Packs where the inner items have UPC\u2019s on them. The Data Synchronization process requires that the inner items in the package be sent to customers. This however does not apply to Canada at this time."}
+{"term": "AB", "definition": "All Bran"}
+{"term": "AFH, or Away From Home", "definition": "Away From Home represents businesses where Kellanova sells food that doesn't sell for at-home consumption. (EX: Restaurants, Convenience stores, Vending machines).  Sales team formerly referred to as \"Specialty\"."}
+{"term": "ASTN", "definition": "Austin"}
+{"term": "Base Material, Base SKU, or Base item", "definition": "\u201cBase\u201d is used to refer to an item that is considered the Base Material. It is typically the everyday item that most customers order. The components inside the Base item are used for \u201cchild\u201d items, which are repacked items or reduced case pack items."}
+{"term": "BNKD", "definition": "Bear Naked"}
+{"term": "BOM", "definition": "Bill of Material"}
+{"term": "BPS", "definition": "Business Process & Systems (Packaging)"}
+{"term": "Brand", "definition": "If this item is On The Go (OTG)/Convenience Snack Packs (CSP), then ensure selection of Brand name during Requestor Update task includes OTG (EX: Caddies Cheez-It OTG)."}
+{"term": "CA", "definition": "Canada"}
+{"term": "CARMEL", "definition": "Caramel"}
+{"term": "Case", "definition": "CS"}
+{"term": "CAT Status", "definition": "Canada Tax / Canada Finance Tax - Status whether this team is (--) Not Assigned;  (X) In Process;  (C) Complete/Approved;  (R) Returned"}
+{"term": "CBP", "definition": "Customer Business Plans"}
+{"term": "CF Status", "definition": "Category Finance - Status whether this team is (--) Not Assigned;  (X) In Process;  (C) Complete/Approved;  (R) Returned"}
+{"term": "Child", "definition": "This term is used to refer to an item that is dependent on a Base item for it\u2019s components. An example of a child item is a Repacked item, or a Reduced Case Pack item. They get a new Case UPC assigned, but use the existing Package UPC of the Base (Parent) item."}
+{"term": "CHZIT", "definition": "Cheez-IT"}
+{"term": "Coman", "definition": "A Coman or Co-manufacturer produces products based on the brand owner's specifications, which can include sourcing raw materials, processing, manufacturing and sometimes packaging. Typically has specialized equipment or processes for making the product."}
+{"term": "Copacker", "definition": "A Co-packer is considered a contract packager. They package products that are already manufactured."}
+{"term": "CRML", "definition": "Caramel"}
+{"term": "CS", "definition": "Case"}
+{"term": "Data Synchronization or GDSN (Global Data Synchronization Network)", "definition": "GDSN is a registry that enables trading partners to globally share trusted product data. It supports accurate, real-time data sharing and trade item updates among subscribed trading partners."}
+{"term": "DB Status", "definition": "Dashboard (will be X until LIM submits to Masterfiles for setup) - Status whether this team is (--) Not Assigned;  (X) In Process;  (C) Complete/Approved;  (R) Returned"}
+{"term": "DC", "definition": "Digital Concierge"}
+{"term": "DI", "definition": "Data Integrity"}
+{"term": "DIH Status", "definition": "Data Integrity Hierarchy - Status whether this team is (--) Not Assigned;  (X) In Process;  (C) Complete/Approved;  (R) Returned"}
+{"term": "DIR Status", "definition": "Data Integrity Review - Status whether this team is (--) Not Assigned;  (X) In Process;  (C) Complete/Approved;  (R) Returned"}
+{"term": "Display", "definition": "Term used to describe a type of setup that contains a full unit load of product. Variations of Displays are Mod, Half Mod and Quarter Mod (all three are built using trays), Rainbow Mod (built using full cases of product) and Shippers (built using printed corrugate)."}
+{"term": "Display Variant", "definition": "These are promotional variants of Base, Every Day Displays (Mods, Half Mods, Shippers, etc). They share UPC\u2019s with the Parent or Base item. They do not have pricing loaded, but instead, have a pricing reference which is the Parent or Base item. Customers continue to order the Parent or Base item, and substitution tables are entered into SAP to move it to the Promo Code. This setup type has its own form, separate from the New Item Form Workflow. See also, Promo Code."}
+{"term": "DTC", "definition": "Product sold Direct to Consumer (ie: John Doe), not through the standard Customer base (ie: Walmart, Target, Sysco)"}
+{"term": "Dump Bin", "definition": "Used to describe a variation of a Display setup that has loose items inside (ex. cereal cups) that the customer can pick. Usually set up as a Mod, Half Mod or Quarter Mod (see 3800012603)."}
+{"term": "Ecomm", "definition": "Product sold through an Ecommerce platform (ie: Amazon)"}
+{"term": "EDI (Electronic Data Interchange)", "definition": "The computer-to-computer exchange of business documents between trading companies, using a public standard format like UCS or X12."}
+{"term": "EF Status", "definition": "EPM Finance - Status whether this team is (--) Not Assigned;  (X) In Process;  (C) Complete/Approved;  (R) Returned"}
+{"term": "EG", "definition": "Eggo"}
+{"term": "EXP or EXPT", "definition": "Export refers to products that are produced in the US, but sold in another country."}
+{"term": "FCST", "definition": "Forecast"}
+{"term": "FERT", "definition": "Finished Goods Material type. This includes all setup types that are sold, which would all fall under the Case and Display setup types."}
+{"term": "FLAV", "definition": "Flavor"}
+{"term": "G", "definition": "Gram"}
+{"term": "GM", "definition": "Gram"}
+{"term": "Gram", "definition": "G"}
+{"term": "GS1", "definition": "GS1 stands for Global Standards 1. It is a not-for-profit, international organization that develops and maintains standards for barcodes and other data standards, helping businesses identify, capture, and share trusted data."}
+{"term": "GTIN", "definition": "Global Trade Item Number, which is always 14 digits."}
+{"term": "HALB", "definition": "Semi Finished Goods Material type. These are the WIP Cases and WIP Totes/Kones."}
+{"term": "HUL", "definition": "Half Unit Load. Refers to the base unit of measure for half mod displays."}
+{"term": "K #, K number, or K#", "definition": "Knumbers (corrugate, packaging) or VERP material type"}
+{"term": "K1", "definition": "Retail sales district or business unit. Retail grocery stores encompassing any brick and mortar grocers focused on consuming food \"at home\"."}
+{"term": "KLA", "definition": "Kellanova Latin America"}
+{"term": "KNA", "definition": "Kellanova North America"}
+{"term": "KOM", "definition": "Kellogg Owned Materials refers to the Comanufacturing process. It is a way to indicate that the location will use Kellanova owned materials to produce the item, and there will be a BOM created in SAP. This drives the way that the item is extended by Data Operations using the ZMMU table, ensuring that the correct values are applied."}
+{"term": "KSC", "definition": "Kellanova Specialty Channels (Away From Home (AFH))"}
+{"term": "KUBIC", "definition": "Procedure to streamline\u00a0and\u00a0automate\u00a0the display processes that fall outside\u00a0of the PWR/PDR workflow.\u00a0\u00a0Graphic/structure (configuration) must be based off an existing display."}
+{"term": "LB", "definition": "Pound"}
+{"term": "LIM", "definition": "Logistics Innovation Manager / Supply Chain Innovation Project Manager"}
+{"term": "LM Status", "definition": "LIM Update - Status whether this team is (--) Not Assigned;  (X) In Process;  (C) Complete/Approved;  (R) Returned"}
+{"term": "Magento", "definition": "Magento is an ecommerce platform built on open source technology which provides online merchants with a flexible shopping cart system, as well as control over the look, content\u00a0and functionality of their online store. This is the platform that Kellogg is using for DTC or Direct to Consumer sales"}
+{"term": "Material Prefix", "definition": "Manufacturer identification used to determine UPC prefix"}
+{"term": "MF", "definition": "Masterfiles / Data Operations"}
+{"term": "MF Status", "definition": "Masterfiles Setup - Status whether this team is (--) Not Assigned;  (X) In Process;  (C) Complete/Approved;  (R) Returned"}
+{"term": "MSF", "definition": "Morning Star Farms"}
+{"term": "new Brand", "definition": "If this is a new Brand requiring a separate Profit Center and separate P&L from existing Brands, then it requires a new Brand, which could take 3 weeks to create. Contact Juliana Hurtado and Christa Clapper."}
+{"term": "new Food Form", "definition": "If this item is a new Food Form (ie: bites instead of bars, or new texture such as pops, snaps, or crunch) that will fall under an existing Brand, then it may require a new Type, which could take 3 weeks to create. Contact Supply Chain Data Governance at SCDataGov@kellanova.com."}
+{"term": "new Package Price, or new Price", "definition": "If this item is a new Package Price, then it may require a new Type, which could take 3 weeks to create. Contact Supply Chain Data Governance at SCDataGov@kellanova.com."}
+{"term": "new Planning in TPM, or new Type", "definition": "If this item will be planned\u00a0in TPM (or forecasted) separately from existing products, then it requires a new Type, which could take 3 weeks to create. Contact Supply Chain Data Governance at SCDataGov@kellanova.com."}
+{"term": "new Size", "definition": "If this item is a new Size, then it may require a new Type, which could take 3 weeks to create. Contact Supply Chain Data Governance at SCDataGov@kellanova.com."}
+{"term": "new Sub Brand, or new Sub-Brand", "definition": "If this item is a new Sub Brand, then submit a KNA Request Product Value form in Evolve."}
+{"term": "NG", "definition": "Nutri-Grain"}
+{"term": "NKOM", "definition": "No Kellogg Owned Materials refers to the Comanufacturing process. It is a way to indicate that the location will use their own materials to produce the item, and there will be no BOM in SAP. This drives the way that the item is extended by Data Operations using the ZMMU table, ensuring that the correct values are applied."}
+{"term": "NL Status", "definition": "Nutrition Labeling - Status whether this team is (--) Not Assigned;  (X) In Process;  (C) Complete/Approved;  (R) Returned"}
+{"term": "Non-Traditional Club or Retail Club", "definition": "This refers to a type of Club setup, that resembles a retail straight case with package UPC setup type."}
+{"term": "OTG or CSP", "definition": "On The Go / Convenience Snack Packs"}
+{"term": "Ounce", "definition": "OZ"}
+{"term": "OZ", "definition": "Ounce"}
+{"term": "Pack Size", "definition": "This field is located in the Classification View in the Material Master, and is used by EDI to determine how an item is handled on orders. There are three choices, RETAIL, CLUB PACK and SINGLE SERVE. CLUB PACK and SINGLE SERVE have logic built around them, and RETAIL has none. See EDI Logic Club Pack and EDI Logic Single Serve for more details."}
+{"term": "Pack Type Use", "definition": "This field is located in the Classification View in the Material Master, and is used by the AFH (Away From Home, formerly Specialty Channels) team. There are a variety of choices, but Retail items will always be set up as GROCERY, Club items will always use CLUB PACK, Single Serve items will always use SINGLE SERVE, Bulk items will always use BULK and AFH owned items will use all others."}
+{"term": "Package", "definition": "PKG"}
+{"term": "Packaging Profile", "definition": "The Packaging Profile is used in the Data Synchronization (GS1) process, and provides specific details on the type of item that is being sold to the end consumer."}
+{"term": "Parent", "definition": "This term is used to refer to a item that is considered a Base item. It is typically the everyday item that most customers order. The components inside the parent item are used for \u201cchild\u201d items, which are repacked items or reduced case pack items."}
+{"term": "PCH", "definition": "Pouch"}
+{"term": "PDR", "definition": "Product Development Request includes food innovation, product line extentions, food in/outs, and new brands."}
+{"term": "PES", "definition": "Product Evaluation System. Quality rates the packages and food that are produced against a known list of defects."}
+{"term": "PH", "definition": "Product Hierarchy. It is a multi-level structure that categorizes products based on attributes such as brand, category, and subcategory, enabling efficient material management, pricing, and reporting."}
+{"term": "PKG", "definition": "Package"}
+{"term": "PL", "definition": "Private Label"}
+{"term": "Planning Variant", "definition": "This is a field within the Material Master that EDI references to find which item is considered the Base Material. If items share package UPC\u2019s, there can only be one that is considered the Base Material. The Planning Variant field is where this is indicated within SAP. Other items (children items) that use the same package UPC as the Base, will use National, Customer or Limited. A good example of children items would be Reduced Case Packs or Promo Codes."}
+{"term": "PopTart", "definition": "Pop Tarts"}
+{"term": "PopTarts", "definition": "Pop Tarts"}
+{"term": "Pop-Tarts", "definition": "Pop Tarts"}
+{"term": "Pouch", "definition": "PCH"}
+{"term": "Pouch/Inner Item or Pouch/Inner Package", "definition": "Material which is packaged in separate inner packaging to keep servings individualized.  It may have graphics allowing the item to be sold individually."}
+{"term": "Pound", "definition": "LB"}
+{"term": "PRG", "definition": "Pringles"}
+{"term": "Product Subtype", "definition": "Material Setup Sub Type.  Further classifies the Product Type to apply business rules and gather proper data for the material.  These are some examples: Package with UPC, Package & Pouch/Inner item with UPCs."}
+{"term": "Product Type", "definition": "Material Setup Type. Classifies the type of setup needed by the material so the proper data can be gathered. These are some examples:  Straight Case, Bulk Case, Ecomm, Club."}
+{"term": "Promo Code", "definition": "These are promotional variants of Base, Every Day items. They share UPC\u2019s with the Parent or Base item. They do not have pricing loaded, but instead, have a pricing reference which is the Parent or Base item. Customers continue to order the Parent or Base item, and substitution tables are entered into SAP to move it to the Promo Code. This setup type has its own form, separate from the New Item Form Workflow. See also, Display Variant."}
+{"term": "PT", "definition": "Pop Tarts"}
+{"term": "P-T", "definition": "Pop Tarts"}
+{"term": "PT Status", "definition": "Packaging BPS/Menasha - Status whether this team is (--) Not Assigned;  (X) In Process;  (C) Complete/Approved;  (R) Returned"}
+{"term": "PWR", "definition": "Packaging Work Requests. The request for commercialization of a unique offering that creates new packaging or alters existing packaging, without altering food.  Specific packaging or displays that need to be at a certain place at a certain time."}
+{"term": "PWS", "definition": "Portable Wholesome Snacks"}
+{"term": "QUL", "definition": "Quarter Unit Load. Refers to the base unit of measure for quarter mod displays."}
+{"term": "R&D", "definition": "Research and Development"}
+{"term": "Rainbow Mod", "definition": "Refers to a type of Display Full Mod setup type that is built using full cases of product, vs trays of product."}
+{"term": "RD Status", "definition": "R/D Quality - Status whether this team is (--) Not Assigned;  (X) In Process;  (C) Complete/Approved;  (R) Returned"}
+{"term": "Repack/RCP, Repack, RPK, RCP, or Reduced Case Pack", "definition": "An item that is created using an existing Package UPC. It is considered a \u201cchild\u201d item. RCP means Reduced Case Pack."}
+{"term": "Requestor", "definition": "Marketing, Commercial Enablement, Brand Manager, Commercial Strategy"}
+{"term": "RK", "definition": "Rice Krispies"}
+{"term": "RK TREATS", "definition": "Rice Krispie Treats"}
+{"term": "RKT", "definition": "Rice Krispie Treats"}
+{"term": "RKT Squares", "definition": "Rice Krispie Treat Squares"}
+{"term": "RKT Squares SS", "definition": "Rice Krispie Treat Squares Single Serve"}
+{"term": "RQ Status", "definition": "Requestor Initiate - Status whether this team is (--) Not Assigned;  (X) In Process;  (C) Complete/Approved;  (R) Returned"}
+{"term": "RU Status", "definition": "Requestor Update - Status whether this team is (--) Not Assigned;  (X) In Process;  (C) Complete/Approved;  (R) Returned"}
+{"term": "SAP", "definition": "SAP stands for \"Systems, Applications, and Products in Data Processing.\" Originally, it was known in German as \"Systemanalyse und Programmentwicklung,\" which translates to \"System Analysis and Program Development.\" SAP is a leading producer of enterprise resource planning (ERP) software, helping businesses manage their operations more efficiently."}
+{"term": "SCR", "definition": "Supply Chain Request. Projects that are initiated by Supply Chain or the business unit, for the purpose to improve supply chain capabilities, efficiencies, and cost savings.  These projects require wide supply chain integration. Must be integrated with all the PDR and PWR projects to avoid execution conflicts."}
+{"term": "Single Serve", "definition": "Term used to describe an item that can be found (for example) at the checkout, where the consumer can purchase just one \u201csingle serve\u201d vs an entire package or carton."}
+{"term": "SKU, Item, Material, or Product", "definition": "Often used to describe the same thing."}
+{"term": "SLA", "definition": "Service Level Agreement. Each role in the workflow has a designated number of days to perform their task, which is called an SLA.  Most tasks have 2 days. Some tasks have as many as 7 days."}
+{"term": "SPCLTY", "definition": "Away From Home sales district or business unit. Businesses where Kellanova sells food that doesn't sell for at-home consumption. (EX: Restaurants, Convenience stores, Vending machines)."}
+{"term": "SPK", "definition": "Special K"}
+{"term": "SS", "definition": "Single-serve items are products packaged in individual units designed for one-time use or consumption by a single end user. These items support portion control, convenience, and are commonly used in retail, foodservice, and hospitality settings. In terms of the Single Serve Product Type these items have special considerations for how they need to be setup in SAP for TPM planning and EDI logic."}
+{"term": "Straight Case", "definition": "Term used to describe an item that is a basic setup type. It consists of a case and a package, or a case, package and a pouch level."}
+{"term": "SUL/TUL, SUL TUL, SUL, or TUL", "definition": "Shipping Unit Load / Trailer Unit Load. SUL is the Shipping Unit Load (maximum inventory that can be fit into the trailer if NOT tiered), TUL is the Trailer Unit Load (maximum inventory that can be fit into the trailer if tiered)."}
+{"term": "TH", "definition": "Town House"}
+{"term": "TOASTER PASTRY", "definition": "Pop Tarts"}
+{"term": "TPM (Trade Promotion Planning)", "definition": "System used by Sales to do short-term trade promotion planning. EDLP (Every Day Low Price) planning in done in Foundations, but it flows to TPM and then to E1P for the OI allowances."}
+{"term": "Trade Channel", "definition": "Description of base unit or a packaging item's intended trade channel."}
+{"term": "Traditional Club", "definition": "This refers to a type of Club setup where the case and the package are considered the same thing (there is no case). These setup types require the customer to order them in full pallet quantities."}
+{"term": "TSTD", "definition": "Toasted"}
+{"term": "UL", "definition": "Unit Load or sometimes referred to as Pallet. It is the base unit of measure for a full mod display, and is typically used to define a full pallet of product."}
+{"term": "UOM", "definition": "Unit of Measure"}
+{"term": "UPC", "definition": "Universal Product Code, which is always 12 digits."}
+{"term": "VAS (Value Added Services)", "definition": "Refers to the process used to create Displays and Repacks."}
+{"term": "VERP", "definition": "Material type for Knumbers (corrugate, packaging)"}
+{"term": "WHLMSNACKS", "definition": "Wholesome Snacks"}
+{"term": "WIP (Work In Progress)", "definition": "Term used to describe a type of setup for product that is not sold to customers, but used to transfer food within and between plants. There are two kinds of WIP\u2019s, one is finished product in cases (WIP Case), and the other is large totes of food, cereal flakes for example (WIP Tote). Both are set up with the Material Type of HALB."}
+{"term": "WS", "definition": "Wholesome Snacks"}
+{"term": "XREF", "definition": "The EDI_MATERIAL_XREF table is a customer exception based table that is customer (Trading Partner in EDI verbiage) and material specific. \u00a0It is a table where the EDI Team puts in the UPC or GTIN that is ordered by the customer and points it directly to a Kellanova material. \u00a0There is no logic behind it. \u00a0If the Trading Partnership and UPC or GTIN is present in the table, SAP will post to the material that is populated in the table. \u00a0It is primarily used for Dollar customers that order with package UPC code and that need to receive the Reduced Case Pack (RCP) material. This is because RCP materials and Base Materials often share the same package UPC. When a customer orders using a package UPC that is shared among many items, SAP can only post to materials marked as Base Materials, and RCP materials are not marked as Base Materials. \u00a0This table overrides that material determination logic to ensure that the Dollar customers can receive the correct RCP materials."}
+{"term": "Z1", "definition": "Material Status in SAP which means New. At this point the item is visible in SAP and plannable, but not yet in production."}
+{"term": "Z2", "definition": "Material Status in SAP which means Active. At this point the item has been costed by Finance, and is nearing or in production."}
+{"term": "ZBAS", "definition": "Selling price / Red K price condition record"}
+{"term": "ZMMU", "definition": "Material Master Update table in SAP. This is a transaction used by Data Operations to extend items to different locations based on item setup type."}

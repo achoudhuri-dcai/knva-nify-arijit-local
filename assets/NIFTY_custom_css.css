@@ -20,12 +20,6 @@
 	margin-right: 10px;
 }
 
-/* Highlight selected tab with green line*/
-div.tab--selected {
-	border-bottom: none;
-	border-top: 3px solid #6b8e23 !important ; 
-}
-
 /* Changing the font to Gilroy */
 @font-face {
     font-family: 'Gilroy';
@@ -33,7 +27,6 @@ div.tab--selected {
     font-weight: normal; 
     font-style: normal;
 }
-
 
 /* Adding Gilroy Bold */
 @font-face {
@@ -76,16 +69,7 @@ body {
 /* 3. Datatable*/
 /*------------------------------------------------------------------------------------------------------------------------------*/
 
-/* Change data table selected feature colors (trash/sort) to green*/
-.dash-table-container .dash-spreadsheet-container .dash-spreadsheet-inner table {
-    --accent: #6b8e23 !important;
-}
 
-/* Change selected cell color to grey in data table*/
-.dash-table-container .dash-spreadsheet-container .dash-spreadsheet-inner td.focused {
-	border-color: #F2F2F2 !important;
-    background-color: #F2F2F2 !important;
-}
 
 /*------------------------------------------------------------------------------------------------------------------------------*/
 
@@ -280,6 +264,48 @@ body {
 /* Override the default Bootstrap .border color */
 .rounded.border {
     border-color: #DDDDDD !important;
+}
+
+/* General chat container styles */
+.chat-message-row {
+    margin-bottom: 15px;
+}
+
+/* Base bubble styling */
+.chat-bubble {
+    padding: 10px 15px;
+    border-radius: 20px;
+    max-width: 70%;
+    word-wrap: break-word;
+    font-size: 0.9em;
+}
+
+/* Assistant (Left) Bubble */
+.assistant-bubble {
+    background-color: #e6e6e6; /* Light gray */
+    color: #000;
+    margin-right: auto; /* Aligns to the left */
+	border-radius: 10px;
+}
+
+/* User (Right) Bubble */
+.user-bubble {
+    background-color: #8401FF; /* Primary purple */
+    color: white;
+    margin-left: auto; /* Aligns to the right */
+	border-radius: 10px;
+}
+
+/* Button links*/
+.user-bubble .btn-link {
+    color: white !important; /* Forces the link color to white */
+}
+
+/* Role and date header */
+.chat-header {
+    font-size: 0.75em;
+    color: #888;
+    margin-bottom: 4px;
 }
 
 /*

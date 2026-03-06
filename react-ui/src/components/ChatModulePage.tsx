@@ -39,8 +39,11 @@ function stripSearchDebugSections(content: string): string {
     "sql executed:",
     "sample output:",
     "below is a summary of the first 10",
+    "below is a summary of the first 25",
     "below is a summary of the first ten",
+    "below is a summary of the first twenty five",
     "first 10 rows:",
+    "first 25 rows:",
     "```sql",
     "\nsql:",
   ];

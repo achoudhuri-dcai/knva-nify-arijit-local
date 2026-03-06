@@ -233,8 +233,8 @@ export default function NifSearchQueryPanel({
       normalized.columns.map((column) => ({
         field: column,
         headerName: column,
-        minWidth: 180,
-        width: 220,
+        minWidth: 220,
+        flex: 1,
         valueGetter: (_value, row) => {
           const rowValue = row[column];
           if (rowValue === null || rowValue === undefined) {
@@ -248,6 +248,21 @@ export default function NifSearchQueryPanel({
             }
           }
           return String(rowValue);
+        },
+        renderCell: (params) => {
+          const cellText = String(params.value ?? "");
+          return (
+            <Box
+              sx={{
+                whiteSpace: "normal",
+                wordBreak: "break-word",
+                lineHeight: 1.35,
+                py: 0.5,
+              }}
+            >
+              {cellText}
+            </Box>
+          );
         },
       })),
     [normalized.columns],
@@ -441,7 +456,8 @@ export default function NifSearchQueryPanel({
             pagination
             paginationModel={paginationModel}
             onPaginationModelChange={setPaginationModel}
-            pageSizeOptions={[10, 25, 50, 100]}
+            pageSizeOptions={[25, 50, 100]}
+            getRowHeight={() => "auto"}
             disableRowSelectionOnClick
             density="compact"
             sx={{
@@ -451,6 +467,7 @@ export default function NifSearchQueryPanel({
               border: "1px solid rgba(15, 23, 42, 0.08)",
               "& .MuiDataGrid-cell": {
                 borderColor: "rgba(15, 23, 42, 0.08)",
+                alignItems: "flex-start",
               },
               "& .MuiDataGrid-main, & .MuiDataGrid-virtualScroller, & .MuiDataGrid-virtualScrollerContent": {
                 overflowX: "auto !important",

@@ -79,7 +79,6 @@ from lib.fa_dash_utils import instantiate_app
 import lib.projects_lib as pr
 import lib.knova_utils as utils
 import lib.data_processing_utilities as dpu
-import lib.nif_rag_engine as nif_rag
 
 # agent libraries
 import langroid as lr
@@ -159,6 +158,9 @@ NIF_DB_MAX_ROWS = max(1, min(NIF_DB_MAX_ROWS, 2000))
 NIF_DB_TRACE_INCLUDE_ROWS = os.getenv("NIF_DB_TRACE_INCLUDE_ROWS", "true").strip().lower() in {
     "1", "true", "t", "yes", "y", "on"
 }
+NIF_DB_SHOW_SQL_TRACE = os.getenv("NIF_DB_SHOW_SQL_TRACE", "false").strip().lower() in {
+    "1", "true", "t", "yes", "y", "on"
+}
 NIF_DB_SHOW_OUTPUT_RECORDS = os.getenv("NIF_DB_SHOW_OUTPUT_RECORDS", "false").strip().lower() in {
     "1", "true", "t", "yes", "y", "on"
 }
@@ -202,32 +204,7 @@ except Exception:
     NIF_RESUME_SUMMARY_FIELDS = 6
 NIF_RESUME_SUMMARY_FIELDS = max(0, min(NIF_RESUME_SUMMARY_FIELDS, 20))
 
-NIF_CHAT_ENGINE = os.getenv("NIF_CHAT_ENGINE", "legacy").strip().lower()
-if NIF_CHAT_ENGINE not in {"legacy", "rag_v2"}:
-    print(
-        f"> WARNING: Invalid NIF_CHAT_ENGINE={NIF_CHAT_ENGINE!r}; using 'legacy'."
-    )
-    NIF_CHAT_ENGINE = "legacy"
-
-_nif_rag_max_auto_steps_raw = os.getenv("NIF_RAG_MAX_AUTO_STEPS", "10").strip()
-try:
-    NIF_RAG_MAX_AUTO_STEPS = int(_nif_rag_max_auto_steps_raw)
-except Exception:
-    print(
-        f"> WARNING: Invalid NIF_RAG_MAX_AUTO_STEPS={_nif_rag_max_auto_steps_raw!r}; using 10."
-    )
-    NIF_RAG_MAX_AUTO_STEPS = 10
-NIF_RAG_MAX_AUTO_STEPS = max(1, min(NIF_RAG_MAX_AUTO_STEPS, 30))
-
-_nif_rag_retrieval_top_k_raw = os.getenv("NIF_RAG_RETRIEVAL_TOP_K", "4").strip()
-try:
-    NIF_RAG_RETRIEVAL_TOP_K = int(_nif_rag_retrieval_top_k_raw)
-except Exception:
-    print(
-        f"> WARNING: Invalid NIF_RAG_RETRIEVAL_TOP_K={_nif_rag_retrieval_top_k_raw!r}; using 4."
-    )
-    NIF_RAG_RETRIEVAL_TOP_K = 4
-NIF_RAG_RETRIEVAL_TOP_K = max(1, min(NIF_RAG_RETRIEVAL_TOP_K, 10))
+NIF_CHAT_ENGINE = "legacy"
 
 NIF_GUIDE_PROMPT_MODE = os.getenv("NIF_GUIDE_PROMPT_MODE", "legacy").strip().lower()
 if NIF_GUIDE_PROMPT_MODE not in {"legacy", "compact"}:
@@ -266,11 +243,31 @@ except Exception:
     NIF_GUIDE_TURNS_PER_SUBMIT = 4
 NIF_GUIDE_TURNS_PER_SUBMIT = max(1, min(NIF_GUIDE_TURNS_PER_SUBMIT, 10))
 
+_nif_backend_save_every_steps_raw = os.getenv("NIF_BACKEND_SAVE_EVERY_STEPS", "5").strip()
+try:
+    NIF_BACKEND_SAVE_EVERY_STEPS = int(_nif_backend_save_every_steps_raw)
+except Exception:
+    print(
+        f"> WARNING: Invalid NIF_BACKEND_SAVE_EVERY_STEPS={_nif_backend_save_every_steps_raw!r}; using 5."
+    )
+    NIF_BACKEND_SAVE_EVERY_STEPS = 5
+NIF_BACKEND_SAVE_EVERY_STEPS = max(1, min(NIF_BACKEND_SAVE_EVERY_STEPS, 50))
+
 NIF_GUIDE_STRICT_OUTPUT_VALIDATION = os.getenv(
-    "NIF_GUIDE_STRICT_OUTPUT_VALIDATION", "false"
+    "NIF_GUIDE_STRICT_OUTPUT_VALIDATION", "true"
 ).strip().lower() in {
     "1", "true", "t", "yes", "y", "on"
 }
+
+# For step-by-step legacy behavior parity with QA branch.
+# - qa: preserve older NIF guide loop style (single run call, no compact prompt refresh)
+# - current: use current tuned legacy behavior
+NIF_GUIDE_LEGACY_SOURCE = os.getenv("NIF_GUIDE_LEGACY_SOURCE", "qa").strip().lower()
+if NIF_GUIDE_LEGACY_SOURCE not in {"qa", "current"}:
+    print(
+        f"> WARNING: Invalid NIF_GUIDE_LEGACY_SOURCE={NIF_GUIDE_LEGACY_SOURCE!r}; using 'qa'."
+    )
+    NIF_GUIDE_LEGACY_SOURCE = "qa"
 
 NIF_GUIDE_TRIM_HISTORY = os.getenv("NIF_GUIDE_TRIM_HISTORY", "true").strip().lower() in {
     "1", "true", "t", "yes", "y", "on"
@@ -321,12 +318,11 @@ NIF_LONGTERM_MAX_ENTRIES = max(0, min(NIF_LONGTERM_MAX_ENTRIES, 50000))
 print(
     "> NIF_DB config:"
     f" chat_engine={NIF_CHAT_ENGINE},"
-    f" rag_max_auto_steps={NIF_RAG_MAX_AUTO_STEPS},"
-    f" rag_retrieval_top_k={NIF_RAG_RETRIEVAL_TOP_K},"
     f" mode={NIF_DB_SQL_GENERATION_MODE},"
     f" first_pass_turns={NIF_DB_FIRST_PASS_TURNS},"
     f" max_rows={NIF_DB_MAX_ROWS},"
     f" show_output_records={NIF_DB_SHOW_OUTPUT_RECORDS},"
+    f" show_sql_trace={NIF_DB_SHOW_SQL_TRACE},"
     f" trace_include_rows={NIF_DB_TRACE_INCLUDE_ROWS},"
     f" trace_preview_rows={NIF_DB_TRACE_PREVIEW_ROWS},"
     f" prompt_max_abbr={NIF_DB_PROMPT_MAX_ABBREVIATIONS},"
@@ -434,6 +430,13 @@ REACT_NIF_STEP_ENHANCED = os.getenv(
     "REACT_NIF_STEP_ENHANCED", "true"
 ).strip().lower() in {"1", "true", "t", "yes", "y", "on"}
 print(f"> REACT_NIF_STEP_ENHANCED={REACT_NIF_STEP_ENHANCED}")
+
+# Feature flag for staged import of QA Dash-only UI behavior.
+# Keep default off so existing UX remains unchanged unless explicitly enabled.
+DASH_UI_QA_MERGE = os.getenv(
+    "DASH_UI_QA_MERGE", "false"
+).strip().lower() in {"1", "true", "t", "yes", "y", "on"}
+print(f"> DASH_UI_QA_MERGE={DASH_UI_QA_MERGE}")
 
 app_title = "Kellanova Project NIFTY"
 external_stylesheets=[dbc.themes.BOOTSTRAP,
@@ -709,8 +712,9 @@ expert_system_rules = pd.read_excel(
 # Drop rows where Question ID is missing (these are comments)
 expert_system_rules = expert_system_rules.dropna(subset='Question ID')
 
-# Drop Length column
-del expert_system_rules['Length']
+# Drop Length column when present (some rule exports do not include it).
+if 'Length' in list(expert_system_rules.columns):
+    del expert_system_rules['Length']
 
 # Drop START_REQ_INITIATE_Q as this will be auto-filled and it is confusing the bot
 _autopop_question = (expert_system_rules['Question ID'] == 'START_REQ_INITIATE_Q')
@@ -877,35 +881,16 @@ def _build_dropdown_values_catalog() -> dict:
     }
     return _build_dropdown_values_catalog_from_frames(dropdown_frames)
 
-
-NIF_RAG_ARTIFACTS_DIR = os.path.join(utils.CONTROL_FOLDER, "compiled_nif_rag")
-nif_rag_dropdown_catalog = _build_dropdown_values_catalog()
-nif_rag_knowledge_pack = None
-try:
-    nif_rag_knowledge_pack = nif_rag.build_knowledge_pack(
-        rules_df=expert_system_rules,
-        glossary_terms=glossary_and_db_terms_dict,
-        dropdown_catalog=nif_rag_dropdown_catalog,
-        artifacts_dir=NIF_RAG_ARTIFACTS_DIR,
-    )
-    print(
-        f"> NIF RAG knowledge pack built with {len(nif_rag_knowledge_pack.rule_order)} questions. "
-        f"Artifacts: {NIF_RAG_ARTIFACTS_DIR}"
-    )
-except Exception as err:
-    nif_rag_knowledge_pack = None
-    print(f"> WARNING: Failed to build NIF RAG knowledge pack: {err}")
-
-# In-memory RAG state per user session.
-nif_rag_session_state = {}
-nif_rag_message_history = {}
+# Legacy step-by-step flow source of truth:
+# Expert_System_Rules.xlsx injected into <STEP_BY_STEP_RULES> prompt.
+nif_backend_save_state = {}
 nif_config_reload_lock = threading.Lock()
 
 
 def reload_nif_runtime_configuration() -> dict:
     """
     Reload NIF rules/glossary/dropdown references from control_docs without restart.
-    Rebuilds markdown caches and RAG v2 knowledge pack.
+    Rebuilds markdown caches for legacy step-by-step flow.
     """
     global expert_system_rules
     global expert_system_rules_md
@@ -923,8 +908,6 @@ def reload_nif_runtime_configuration() -> dict:
     global glossary_and_db_terms
     global glossary_and_db_terms_dict
     global nif_field_number_to_column
-    global nif_rag_dropdown_catalog
-    global nif_rag_knowledge_pack
 
     with nif_config_reload_lock:
         # 1) Reload rule source
@@ -1019,20 +1002,7 @@ def reload_nif_runtime_configuration() -> dict:
         glossary_local = glossary_local.set_index(keys='term')
         glossary_dict_local = dict(glossary_local['definition'])
 
-        # 4) Rebuild RAG knowledge pack (non-fatal if build fails)
-        rag_build_error = None
-        rag_pack_local = None
-        try:
-            rag_pack_local = nif_rag.build_knowledge_pack(
-                rules_df=rules_local,
-                glossary_terms=glossary_dict_local,
-                dropdown_catalog=dropdown_values_local,
-                artifacts_dir=NIF_RAG_ARTIFACTS_DIR,
-            )
-        except Exception as err:
-            rag_build_error = str(err)
-
-        # 5) Commit to globals
+        # 4) Commit to globals
         expert_system_rules = rules_local
         expert_system_rules_md = rules_md_local
         expert_rule_question_ids = rule_ids_local
@@ -1051,14 +1021,8 @@ def reload_nif_runtime_configuration() -> dict:
         glossary_and_db_terms = glossary_local
         glossary_and_db_terms_dict = glossary_dict_local
         nif_field_number_to_column = field_map_local
-        nif_rag_dropdown_catalog = dropdown_values_local
 
-        if rag_pack_local is not None:
-            nif_rag_knowledge_pack = rag_pack_local
-
-        # 6) Reset RAG states and refresh legacy task prompts
-        nif_rag_session_state.clear()
-        nif_rag_message_history.clear()
+        # 5) Refresh legacy task prompts
 
         refreshed_legacy_tasks = 0
         for (task_name, _sid), task_obj in list(session_tasks.items()):
@@ -1081,9 +1045,6 @@ def reload_nif_runtime_configuration() -> dict:
             "glossary_count": len(glossary_dict_local),
             "dropdown_lists": len(dropdown_values_local),
             "legacy_tasks_refreshed": refreshed_legacy_tasks,
-            "rag_pack_ready": rag_pack_local is not None or nif_rag_knowledge_pack is not None,
-            "rag_build_error": rag_build_error,
-            "artifacts_dir": NIF_RAG_ARTIFACTS_DIR,
         }
         return summary
 
@@ -1268,15 +1229,19 @@ def get_available_files(DIR):
 
 def remove_tool_calls(text):
     """
-    Remove TOOL calls in the format 'TOOL: function_name { ... }' from text.
-    Handles multi-line JSON objects within the tool calls.
+    Remove TOOL calls in either format:
+    - 'TOOL: function_name { ... }'
+    - 'TOOL: { ... }'
+    Handles multi-line JSON objects within tool calls.
     """
-    # Pattern matches 'TOOL: ' followed by function name and JSON object
-    # Uses non-greedy matching and handles nested braces
-    pattern = r'TOOL:\s*\w+\s*\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}'
+    raw_text = str(text or "")
 
-    # Remove the tool calls
-    cleaned_text = re.sub(pattern, '', text)
+    # Remove balanced JSON payload forms after TOOL: with or without function name.
+    pattern = r'TOOL:\s*(?:\w+\s*)?\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}'
+    cleaned_text = re.sub(pattern, '', raw_text)
+
+    # Remove any remaining TOOL lines defensively.
+    cleaned_text = re.sub(r'(?im)^\s*TOOL:\s*.*$', '', cleaned_text)
 
     # Clean up extra whitespace/newlines that may result
     cleaned_text = re.sub(r'\n\s*\n\s*\n', '\n\n', cleaned_text)
@@ -1675,6 +1640,12 @@ def enforce_nifguide_response_contract(response_text: str, expected_question_id:
     heading_pattern = re.compile(r"(?im)^\s*\*{0,2}\s*question\s+([A-Z0-9_]+)\s*:")
     heading_matches = list(heading_pattern.finditer(text))
 
+    # Hard guard: when we know expected next question, require explicit
+    # "Question <ID>:" in the assistant response. This prevents confirmation-only
+    # replies like "You selected ... saved ..." from being shown without the next step.
+    if expected_question_id and not heading_matches:
+        return build_nifguide_fallback_message(expected_question_id)
+
     if len(heading_matches) > 1:
         text = text[: heading_matches[1].start()].strip()
         heading_matches = list(heading_pattern.finditer(text))
@@ -1771,6 +1742,16 @@ def format_nifguide_choices_multiline(response_text: str) -> str:
     text = _safe_text(response_text)
     if not text:
         return text
+
+    # Collapse QA-style confirmation preamble into the next question block.
+    # Example:
+    # "You selected <...>. Let me save that now." + "Question ...".
+    if re.search(r"(?im)^\s*(?:\*{0,2}\s*)?question\s+[A-Z0-9_\.:-]+\s*:", text):
+        text = re.sub(
+            r"(?is)^\s*you\s+selected\b.*?\blet\s+me\s+save\s+that\s+now\.?\s*",
+            "",
+            text,
+        ).strip()
 
     if re.search(r"(?m)^\s*\d+\.\s+\S+", text):
         return text
@@ -1970,6 +1951,7 @@ def build_nifguide_system_message(
             - Call IMMEDIATELY after collecting each field value
             - Use parameters: LAST_QUESTION_ID, LAST_VALUE, and FIELD_NUMBER (only if specified)
             - Do NOT proceed until function returns successfully
+            - Do NOT narrate backend persistence on every turn (avoid phrases like "Now saving ...")
             - LAST_VALUE format:
               * For <'VALUE'>: the exact value without angle brackets
               * For <FREEFORM>: user's validated literal answer
@@ -2921,7 +2903,7 @@ def execute_nif_select_query(sql_query: str, max_rows: int | None = None) -> dic
 
 def format_nif_query_result_for_llm(
     result: dict,
-    preview_rows: int = 10,
+    preview_rows: int = 25,
     include_row_preview: bool = True,
 ) -> str:
     """
@@ -2996,7 +2978,13 @@ class query_nif_db_tool_2(lr.agent.ToolMessage):
         structured_result = execute_nif_select_query(self.SQL_QUERY, max_rows=NIF_DB_MAX_ROWS)
         last_nif_sql_query = structured_result.get("sql")
         last_nif_query_result = structured_result
-        return format_nif_query_result_for_llm(structured_result, preview_rows=10)
+        # Provide actual row values to the LLM (especially for aggregate/count queries),
+        # while keeping SQL traces hidden in UI unless explicitly enabled.
+        return format_nif_query_result_for_llm(
+            structured_result,
+            preview_rows=25,
+            include_row_preview=True,
+        )
 
 # A companion tool for schema exploration
 class get_db_schema_tool(lr.agent.ToolMessage):
@@ -3113,6 +3101,78 @@ def _select_nif_core_columns(column_list_cln):
     return core_columns[:20]
 
 
+def _load_nif_database_schema_snapshot(db_path: str) -> dict:
+    """
+    Return complete DB schema as:
+    {
+      "TABLE_A": [("col1", "TEXT"), ("col2", "INTEGER"), ...],
+      ...
+    }
+    """
+    schema_by_table = {}
+    db = None
+    try:
+        db = sqlite3.connect(db_path)
+        c = db.cursor()
+        c.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name"
+        )
+        table_rows = c.fetchall() or []
+        for row in table_rows:
+            table_name = str(row[0] or "").strip()
+            if not table_name:
+                continue
+            c.execute(f"PRAGMA table_info('{table_name}')")
+            cols = c.fetchall() or []
+            col_pairs = []
+            for col in cols:
+                col_name = str(col[1] or "").strip()
+                col_type = str(col[2] or "").strip() or "UNKNOWN"
+                if col_name:
+                    col_pairs.append((col_name, col_type))
+            schema_by_table[table_name] = col_pairs
+    except Exception as err:
+        print(f"> WARNING: failed loading DB schema snapshot: {err}")
+        return {}
+    finally:
+        if db:
+            db.close()
+    return schema_by_table
+
+
+def _load_status_column_samples(db_path: str, table_name: str, per_column_limit: int = 12) -> dict:
+    """
+    Return distinct sample values for status-like columns in a table.
+    """
+    samples = {}
+    db = None
+    try:
+        db = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+        c = db.cursor()
+        c.execute(f"PRAGMA table_info('{table_name}')")
+        cols = c.fetchall() or []
+        status_cols = [str(col[1]) for col in cols if "status" in str(col[1]).lower()]
+        for col_name in status_cols:
+            q = (
+                f'SELECT DISTINCT "{col_name}" FROM "{table_name}" '
+                f'WHERE "{col_name}" IS NOT NULL AND trim(CAST("{col_name}" AS TEXT)) != "" '
+                f'LIMIT {max(1, int(per_column_limit))}'
+            )
+            try:
+                c.execute(q)
+                vals = [str(r[0]) for r in (c.fetchall() or [])]
+                if vals:
+                    samples[col_name] = vals
+            except Exception:
+                continue
+    except Exception as err:
+        print(f"> WARNING: failed loading status-column samples: {err}")
+    finally:
+        if db:
+            db.close()
+    return samples
+
+
 def get_relevant_db_abbreviations(query_text, max_items=None):
     """
     Dynamically select a small abbreviation subset relevant to the current query.
@@ -3195,7 +3255,9 @@ def get_relevant_db_abbreviations(query_text, max_items=None):
 def build_nif_database_system_message(
     table_name,
     core_columns,
+    full_schema_by_table,
     status_values,
+    status_column_samples,
     country_abbreviations,
     current_username,
     relevant_abbreviations,
@@ -3230,6 +3292,12 @@ def build_nif_database_system_message(
     else:
         abbreviation_sql_examples = "- (No abbreviation templates for this query.)"
 
+    table_columns = []
+    for col_name, col_type in full_schema_by_table.get(table_name, []):
+        table_columns.append(f"{table_name}.\"{col_name}\" ({col_type})")
+    if not table_columns:
+        table_columns = [f"{table_name}.<no columns loaded>"]
+
     return f'''
         You are NIFDatabaseAgent. Convert user questions into one SQLite query
         against table "{table_name}" and answer strictly from query results.
@@ -3246,6 +3314,9 @@ def build_nif_database_system_message(
         - Do not ask clarifying questions before first query unless impossible to
           map to schema.
         - Never SELECT *; select only required columns.
+        - For list/detail outputs (non-aggregate), include the PDF link column
+          in results when present in schema. In this database the column is
+          typically "Link". Do not force this for pure count/aggregate queries.
         - If LIMIT is needed, use LIMIT {NIF_DB_MAX_ROWS} by default unless user
           explicitly asks for fewer rows.
         - Superlative intent rule: if user asks for "most", "top", "highest",
@@ -3259,12 +3330,35 @@ def build_nif_database_system_message(
           "no matching records found".
         - Final user answer: max 5 lines, no SQL, no internal reasoning, no
           repeated rows, and no fabricated values.
+        - Do not claim display limits (for example, "only first 10 rows")
+          unless the tool output explicitly says results were truncated.
 
         Schema context:
         - Core columns (name, type): {core_columns}
+        - Full database schema (all tables/columns): {full_schema_by_table}
+        - Active table columns (authoritative): {table_columns}
         - Status_Name values: {status_values}
+        - Status-like columns and sample values: {status_column_samples}
         - Country abbreviations: {country_abbreviations}
         - Relevant abbreviations for this query only: {relevant_abbreviations}
+
+        Column-resolution policy (MANDATORY):
+        - Use only columns listed in the active table columns above.
+        - Do not invent new column names.
+        - If user wording does not exactly match a column, choose the closest
+          existing column by token similarity/synonym intent.
+        - Example: if user asks "PDF links" and there is no exact "PDF Link",
+          map to the most similar existing PDF-related column in schema.
+        - Before returning SQL, verify every quoted column name exists in schema.
+        - For status-related intent (status/state/stage/material complete/etc.),
+          search across ALL status-like columns using OR unless user explicitly
+          pins one column:
+          LOWER(COALESCE("Status", '')) LIKE '%<term>%'
+          OR LOWER(COALESCE("Status_Name", '')) LIKE '%<term>%'
+          OR LOWER(COALESCE("Detailed Status", '')) LIKE '%<term>%'
+        - Example: "status material complete" should match "Status" values like
+          "LIM Report-Material Complete" even if "Status_Name" is only
+          Approved/Running/etc.
 
         SQL rules:
         - Wrap column names in double quotes.
@@ -3359,6 +3453,38 @@ def build_nif_database_system_message(
           GROUP BY "LIM"
           ORDER BY cnt ASC
           LIMIT 1
+        - If user asks for multiple entity dimensions in one question (for example:
+          "LIM or creator", "LIM and creator", "by LIM and creator"), return both
+          aggregates independently in the same response.
+          - "creator" maps to "Created_By".
+          - Preferred SQL pattern: compute separate top/bottom aggregates for each
+            entity and combine with UNION ALL.
+          Example:
+          WITH lim_top AS (
+            SELECT
+              'LIM' AS "Entity_Type",
+              "LIM" AS "Entity_Value",
+              COUNT(*) AS cnt
+            FROM "NIFS"
+            WHERE LOWER(COALESCE("Status_Name", '')) LIKE '%approved%'
+            GROUP BY "LIM"
+            ORDER BY cnt DESC
+            LIMIT 1
+          ),
+          creator_top AS (
+            SELECT
+              'Creator' AS "Entity_Type",
+              "Created_By" AS "Entity_Value",
+              COUNT(*) AS cnt
+            FROM "NIFS"
+            WHERE LOWER(COALESCE("Status_Name", '')) LIKE '%approved%'
+            GROUP BY "Created_By"
+            ORDER BY cnt DESC
+            LIMIT 1
+          )
+          SELECT * FROM lim_top
+          UNION ALL
+          SELECT * FROM creator_top
         - For person names in "Created_By", try both orders:
           LOWER("Created_By") IN (LOWER('Marie Smith'), LOWER('Smith, Marie'))
         - For empty checks use both NULL and empty string:
@@ -3389,7 +3515,9 @@ def refresh_nif_database_task_prompt(session_task, current_username, user_query)
     compact_prompt = build_nif_database_system_message(
         table_name=prompt_context.get("table_name", "NIFS"),
         core_columns=prompt_context.get("core_columns", []),
+        full_schema_by_table=prompt_context.get("full_schema_by_table", {}),
         status_values=prompt_context.get("status_values", []),
+        status_column_samples=prompt_context.get("status_column_samples", {}),
         country_abbreviations=prompt_context.get("country_abbreviations", {}),
         current_username=current_username,
         relevant_abbreviations=relevant_abbreviations,
@@ -3421,12 +3549,14 @@ def create_nif_database_task(
     
     # Using just the main table
     table_name = 'NIFS'
+    full_schema_by_table = _load_nif_database_schema_snapshot(nif_database)
     column_list = utils.run_query(nif_database, f"SELECT * FROM pragma_table_info('{table_name}');")
     column_list_cln = [(info[1], info[2]) for info in column_list]      # Keep column names and types
     core_columns = _select_nif_core_columns(column_list_cln)
     
     status_name_distinct_values = utils.run_query(nif_database, f"select distinct Status_Name from NIFS")
     status_values = _normalize_status_values(status_name_distinct_values)
+    status_column_samples = _load_status_column_samples(nif_database, table_name)
     
     country_abbreviations = {
         "United States":"US"
@@ -3459,7 +3589,9 @@ def create_nif_database_task(
     system_message = build_nif_database_system_message(
         table_name=table_name,
         core_columns=core_columns,
+        full_schema_by_table=full_schema_by_table,
         status_values=status_values,
+        status_column_samples=status_column_samples,
         country_abbreviations=country_abbreviations,
         current_username=CURRENT_USERNAME,
         relevant_abbreviations={},
@@ -3480,7 +3612,9 @@ def create_nif_database_task(
     nif_database_task._nif_prompt_context = {
         "table_name": table_name,
         "core_columns": core_columns,
+        "full_schema_by_table": full_schema_by_table,
         "status_values": status_values,
+        "status_column_samples": status_column_samples,
         "country_abbreviations": country_abbreviations,
         "sql_mode_override": sql_mode_override,
     }
@@ -4756,118 +4890,139 @@ def reset_on_x_or_escape(is_open, current_radio_value):
 
     raise dash.exceptions.PreventUpdate
 
+def _nif_backend_state_key(session_id: str, user_email: str) -> tuple:
+    return ("nif_backend_save", str(user_email or ""), str(session_id or ""))
 
-def _nif_rag_state_key(session_id: str, user_email: str) -> tuple:
-    return ("nif_rag", str(user_email or ""), str(session_id or ""))
+
+def _extract_nif_last_progress_markers(nif_progress_df: Optional[pd.DataFrame]) -> tuple[str, str]:
+    if not isinstance(nif_progress_df, pd.DataFrame) or nif_progress_df.empty:
+        return "", ""
+    try:
+        last_qid = str(
+            nif_progress_df.get("_agentref_last_question_answered", pd.Series([""])).iloc[0]
+        ).strip()
+    except Exception:
+        last_qid = ""
+    try:
+        last_answer = str(
+            nif_progress_df.get("_agentref_last_answer_given", pd.Series([""])).iloc[0]
+        ).strip()
+    except Exception:
+        last_answer = ""
+    return last_qid, last_answer
 
 
-def reset_nif_rag_state(session_id: str, user_email: str = "") -> None:
-    """
-    Reset in-memory state/history for RAG v2 New NIF session.
-    """
+def reset_nif_backend_save_state(session_id: str, user_email: str = "") -> None:
     if user_email:
-        key = _nif_rag_state_key(session_id, user_email)
-        nif_rag_session_state.pop(key, None)
-        nif_rag_message_history.pop(key, None)
+        key = _nif_backend_state_key(session_id, user_email)
+        nif_backend_save_state.pop(key, None)
         return
 
     sid_text = str(session_id or "")
-    keys_to_remove = [k for k in list(nif_rag_session_state.keys()) if len(k) >= 3 and k[2] == sid_text]
+    keys_to_remove = [k for k in list(nif_backend_save_state.keys()) if len(k) >= 3 and k[2] == sid_text]
     for key in keys_to_remove:
-        nif_rag_session_state.pop(key, None)
-        nif_rag_message_history.pop(key, None)
+        nif_backend_save_state.pop(key, None)
 
 
-def clear_nif_rag_user_state(user_email: str) -> None:
+def clear_nif_backend_user_state(user_email: str) -> None:
     email_text = str(user_email or "")
     keys_to_remove = [
-        k for k in list(nif_rag_session_state.keys()) if len(k) >= 3 and k[1] == email_text
+        k for k in list(nif_backend_save_state.keys()) if len(k) >= 3 and k[1] == email_text
     ]
     for key in keys_to_remove:
-        nif_rag_session_state.pop(key, None)
-        nif_rag_message_history.pop(key, None)
+        nif_backend_save_state.pop(key, None)
 
 
-def _save_nif_rag_history_turn(
-    user_email: str,
+def maybe_autosave_nif_progress(
+    user_data,
     session_id: str,
-    user_message: str,
-    assistant_message: str,
-) -> None:
-    key = _nif_rag_state_key(session_id, user_email)
-    history = nif_rag_message_history.get(key, [])
-    history.append(LLMMessage(role="user", content=str(user_message or "")))
-    history.append(LLMMessage(role="assistant", content=str(assistant_message or "")))
-
-    if NIF_GUIDE_TRIM_HISTORY:
-        max_messages = max(4, NIF_GUIDE_HISTORY_WINDOW * 2)
-        if len(history) > max_messages:
-            history = history[-max_messages:]
-
-    nif_rag_message_history[key] = history
-    save_chat_history(history, user_email, session_id)
-
-
-def execute_nif_rag_turn(
-    user_input: str,
     user_nif_progress_df: pd.DataFrame,
-    session_id: str,
-    user_email: str,
-) -> tuple[str, pd.DataFrame]:
-    if nif_rag_knowledge_pack is None:
-        return (
-            "RAG v2 New NIF engine is not available because the knowledge pack failed to build. "
-            "Switch NIF_CHAT_ENGINE=legacy or rebuild startup artifacts."
-        ), user_nif_progress_df
+    prior_last_question_id: str = "",
+    prior_last_answer: str = "",
+    force_save: bool = False,
+) -> dict:
+    if not isinstance(user_nif_progress_df, pd.DataFrame) or user_nif_progress_df.empty:
+        return {"saved": False, "reason": "empty_progress"}
 
-    state_key = _nif_rag_state_key(session_id, user_email)
-    state = nif_rag_session_state.get(state_key, {})
+    if NIF_BACKEND_SAVE_EVERY_STEPS <= 0:
+        return {"saved": False, "reason": "autosave_disabled"}
 
-    result = nif_rag.run_turn(
-        pack=nif_rag_knowledge_pack,
-        user_input=str(user_input or ""),
-        progress_df=user_nif_progress_df,
-        field_number_to_column=nif_field_number_to_column,
-        session_state=state,
-        max_auto_steps=NIF_RAG_MAX_AUTO_STEPS,
-        retrieval_top_k=NIF_RAG_RETRIEVAL_TOP_K,
+    _active_user_name, active_user_email = _resolve_active_user_identity(user_data)
+    state_key = _nif_backend_state_key(session_id, active_user_email)
+    state = nif_backend_save_state.get(state_key, {})
+
+    current_qid, current_answer = _extract_nif_last_progress_markers(user_nif_progress_df)
+
+    previous_qid = str(state.get("last_question_id", "") or "").strip()
+    previous_answer = str(state.get("last_answer", "") or "").strip()
+    if not previous_qid and prior_last_question_id:
+        previous_qid = str(prior_last_question_id).strip()
+    if not previous_answer and prior_last_answer:
+        previous_answer = str(prior_last_answer).strip()
+
+    current_qid_normalized = current_qid.upper()
+    valid_current_qid = (
+        bool(current_qid_normalized)
+        and current_qid_normalized not in {"<NOT YET DETERMINED>", "NAN", "NONE", "START REQ INITIATE"}
     )
+    progressed_to_new_question = bool(valid_current_qid and current_qid != previous_qid)
 
-    updated_df = result.get("updated_progress_df", user_nif_progress_df)
-    next_state = result.get("session_state", state)
-    response_text = str(result.get("response_text", "") or "").strip()
-    retrieval_hits = result.get("retrieval_hits", []) or []
+    answered_step_count = int(state.get("answered_step_count", 0) or 0)
+    if progressed_to_new_question:
+        answered_step_count += 1
 
-    nif_rag_session_state[state_key] = next_state
+    next_state = {
+        "answered_step_count": answered_step_count,
+        "last_question_id": current_qid,
+        "last_answer": current_answer,
+    }
+    nif_backend_save_state[state_key] = next_state
 
-    if extra_output_bool and retrieval_hits:
-        response_text = (
-            response_text
-            + "\n\n---\n"
-            + f"RAG Context Hits: {len(retrieval_hits)} "
-            + "(rule/glossary/dropdown)"
-        )
-
-    _save_nif_rag_history_turn(
-        user_email=user_email,
-        session_id=session_id,
-        user_message=user_input,
-        assistant_message=response_text,
+    should_save = force_save or (
+        progressed_to_new_question
+        and answered_step_count > 0
+        and (answered_step_count % NIF_BACKEND_SAVE_EVERY_STEPS == 0)
     )
-    return response_text, updated_df
+    if not should_save:
+        return {
+            "saved": False,
+            "reason": "not_due",
+            "answered_step_count": answered_step_count,
+            "interval": NIF_BACKEND_SAVE_EVERY_STEPS,
+        }
+
+    user_nif_progress_dir = get_user_nif_progress_dir(active_user_email)
+    os.makedirs(user_nif_progress_dir, exist_ok=True)
+    autosave_filename = f"_autosave_{str(session_id or 'session')}.pkl"
+    autosave_path = user_nif_progress_dir / autosave_filename
+
+    try:
+        user_nif_progress_df.to_pickle(autosave_path)
+    except Exception as exc:
+        return {
+            "saved": False,
+            "reason": "save_failed",
+            "error": str(exc),
+            "answered_step_count": answered_step_count,
+        }
+
+    return {
+        "saved": True,
+        "reason": "interval_reached" if not force_save else "forced",
+        "answered_step_count": answered_step_count,
+        "interval": NIF_BACKEND_SAVE_EVERY_STEPS,
+        "autosave_file": autosave_filename,
+    }
 
 
 def build_nif_resume_submit_text(
     user_nif_progress_df: pd.DataFrame,
     last_question_answered: str,
     last_answer_given: str,
-    engine_mode: str = "legacy",
 ) -> str:
     """
     Build compact resume prompt to avoid sending full table back to the LLM.
     """
-    engine_mode_normalized = str(engine_mode or "legacy").strip().lower()
-
     if NIF_RESUME_VERBOSE_CONTEXT:
         return (
             "Resume the user's NIF in progress.\n"
@@ -4898,16 +5053,6 @@ def build_nif_resume_submit_text(
                 break
 
     summary_block = "\n".join(summary_lines) if summary_lines else "- (No filled NIF field values yet.)"
-    if engine_mode_normalized == "rag_v2":
-        return (
-            "NIF_RAG_RESUME: Resume NIF from prior chat.\n"
-            f"Last answered question ID: {last_question_answered}\n"
-            f"Last answer given: {last_answer_given}\n"
-            "Use dataframe state as source of truth.\n"
-            "Compact field snapshot:\n"
-            f"{summary_block}"
-        )
-
     return (
         "Resume the user's NIF in progress.\n"
         f"Last answered question ID: {last_question_answered}\n"
@@ -4990,12 +5135,10 @@ def build_reload_nif_message(active_task_name):
         f"Dropdown lists: {summary.get('dropdown_lists', 0)}, "
         f"Legacy sessions refreshed: {summary.get('legacy_tasks_refreshed', 0)}."
     )
-
-    rag_error = summary.get("rag_build_error")
-    if rag_error:
-        message += f" RAG rebuild warning: {rag_error}"
-    else:
-        message += " RAG artifacts refreshed."
+    message += (
+        " Legacy step flow remains prompt-driven via <STEP_BY_STEP_RULES> "
+        "from Expert_System_Rules.xlsx."
+    )
 
     if str(active_task_name or "").strip() == 'nifguide_task':
         message += " Continue chatting to use the updated rules immediately."
@@ -5074,13 +5217,8 @@ def start_new_nif_session(user_data, active_sid, current_clicks):
     """
     active_user_name, active_user_email = _resolve_active_user_identity(user_data)
     active_task_name = "nifguide_task"
-    display_text = (
-        "New NIF RAG v2 engine is active."
-        if NIF_CHAT_ENGINE == "rag_v2"
-        else ""
-    )
-    if NIF_CHAT_ENGINE == "rag_v2":
-        reset_nif_rag_state(active_sid, active_user_email)
+    display_text = ""
+    reset_nif_backend_save_state(active_sid, active_user_email)
 
     submit_text = "Start a new NIF with field 'LIM'"
     new_clicks = (current_clicks or 0) + 1
@@ -5158,27 +5296,19 @@ def load_saved_nif_session(user_data, active_sid, current_clicks, selected_nif_f
         user_nif_progress_df=user_nif_progress_df,
         last_question_answered=last_question_answered,
         last_answer_given=last_answer_given,
-        engine_mode=NIF_CHAT_ENGINE,
     )
 
-    if NIF_CHAT_ENGINE == "rag_v2":
-        reset_nif_rag_state(active_sid, active_user_email)
+    reset_nif_backend_save_state(active_sid, active_user_email)
 
     if "." in filename:
         filename_label = filename.rsplit(".", 1)[0]
     else:
         filename_label = filename
 
-    if NIF_CHAT_ENGINE == "rag_v2":
-        display_text = (
-            f"Prior NIF '{filename_label}' loaded successfully. "
-            "Submitting resume request to New NIF RAG v2 engine."
-        )
-    else:
-        display_text = (
-            f"Prior NIF '{filename_label}' loaded successfully. "
-            "Submitting resume request to agent."
-        )
+    display_text = (
+        f"Prior NIF '{filename_label}' loaded successfully. "
+        "Submitting resume request to agent."
+    )
 
     return {
         "ok": True,
@@ -5307,7 +5437,10 @@ def update_textarea_and_trigger_submit_chat(selected_question, current_clicks, u
         active_user_email = user_data.get('email', 'user@email.com')
 
     if selected_question == GUIDANCE_QUESTION:
-        display_text = "NIF Step by Step: Please click a button above to start a new NIF chat or load a NIF from a prior chat."
+        if NIF_CHAT_ENGINE == "legacy" and NIF_GUIDE_LEGACY_SOURCE == "qa":
+            display_text = "Continuing conversation with NIF Guide agent"
+        else:
+            display_text = "NIF Step by Step: Please click a button above to start a new NIF chat or load a NIF from a prior chat."
         return (
             no_update,      # Human chat area
             no_update,      # Submit button
@@ -5322,6 +5455,8 @@ def update_textarea_and_trigger_submit_chat(selected_question, current_clicks, u
             active_sid=active_sid,
             current_clicks=current_clicks,
         )
+        if NIF_CHAT_ENGINE == "legacy" and NIF_GUIDE_LEGACY_SOURCE == "qa":
+            start_result["simple_message"] = "Continuing conversation with NIF Guide agent"
         return (
             start_result.get("human_chat_value"),
             start_result.get("submit_clicks"),
@@ -5505,13 +5640,9 @@ def chat_bot(n_sub, human_chat_value, user_data, sid, user_nif_progress_json, ac
         if active_task_name == 'nifguide_task':
             # Read NIF progress data
             user_nif_progress_df = pd.read_json(user_nif_progress_json, orient='split')
-
-            if NIF_CHAT_ENGINE == "rag_v2" and nif_rag_knowledge_pack is not None:
-                session_task = None
-            else:
-                session_task = get_session_task('nifguide_task', sid, active_user_name)
-                # Update user task to use user_nif_progress_df
-                session_task.agent.set_dataframe(user_nif_progress_df)
+            session_task = get_session_task('nifguide_task', sid, active_user_name)
+            # Update user task to use user_nif_progress_df
+            session_task.agent.set_dataframe(user_nif_progress_df)
 
         elif active_task_name == 'nif_database_task':
             session_task = get_session_task('nif_database_task', sid, active_user_name)
@@ -5562,6 +5693,13 @@ def chat_bot(n_sub, human_chat_value, user_data, sid, user_nif_progress_json, ac
         nif_query_result_data = None
         nif_llm_prompt_data = None
         expected_nifguide_qid = ""
+        prior_nif_last_qid = ""
+        prior_nif_last_answer = ""
+
+        if active_task_name == 'nifguide_task':
+            prior_nif_last_qid, prior_nif_last_answer = _extract_nif_last_progress_markers(
+                user_nif_progress_df
+            )
 
         if active_task_name == 'nif_docsearch_task':
             try:
@@ -5589,37 +5727,17 @@ def chat_bot(n_sub, human_chat_value, user_data, sid, user_nif_progress_json, ac
 
             return full_response, no_update, '', None, None
 
-        if (
-            active_task_name == 'nifguide_task'
-            and NIF_CHAT_ENGINE == "rag_v2"
-            and nif_rag_knowledge_pack is not None
-        ):
-            try:
-                full_response, user_nif_progress_df = execute_nif_rag_turn(
-                    user_input=human_chat_value,
-                    user_nif_progress_df=user_nif_progress_df,
-                    session_id=sid,
-                    user_email=active_user_email,
-                )
-            except Exception as err:
-                full_response = (
-                    "I couldn't complete your request in NIF RAG mode.\n\n"
-                    "Switch NIF_CHAT_ENGINE=legacy to restore the prior path.\n\n"
-                    f"Details: {err}"
-                )
-
-            if extra_output_bool:
-                full_response = f"<NIFGuideRAGAgent>         {full_response}          (Session ID: {sid})"
-
-            full_response = format_nifguide_choices_multiline(full_response)
-            user_nif_progress_json = user_nif_progress_df.to_json(orient='split')
-            return full_response, user_nif_progress_json, '', None, None
-
         # Did turns=1 break user nif progress df update? YES!!
         # session_task.run(human_chat_value, session_id=sid, turns=1)    # Turns=1 ensures the agent doesn't get into a loop
         # session_task.run(human_chat_value, session_id=sid, turns=10)    # Turns=10 ensures the agents can complete their back and forth
 
-        if active_task_name == 'nifguide_task':
+        use_qa_legacy_nifguide = (
+            active_task_name == 'nifguide_task'
+            and NIF_CHAT_ENGINE == "legacy"
+            and NIF_GUIDE_LEGACY_SOURCE == "qa"
+        )
+
+        if active_task_name == 'nifguide_task' and not use_qa_legacy_nifguide:
             try:
                 refresh_nifguide_task_prompt(
                     session_task=session_task,
@@ -5654,11 +5772,15 @@ def chat_bot(n_sub, human_chat_value, user_data, sid, user_nif_progress_json, ac
 
         try:
             if active_task_name == 'nifguide_task':
-                session_task.run(
-                    human_chat_value,
-                    session_id=sid,
-                    turns=NIF_GUIDE_TURNS_PER_SUBMIT,
-                )
+                if use_qa_legacy_nifguide:
+                    # QA legacy behavior: single run call for NIF guide.
+                    session_task.run(human_chat_value, session_id=sid)
+                else:
+                    session_task.run(
+                        human_chat_value,
+                        session_id=sid,
+                        turns=NIF_GUIDE_TURNS_PER_SUBMIT,
+                    )
             elif active_task_name == 'nif_database_task' and NIF_DB_FORCE_FIRST_PASS_SQL:
                 session_task.run(
                     human_chat_value,
@@ -5745,11 +5867,19 @@ def chat_bot(n_sub, human_chat_value, user_data, sid, user_nif_progress_json, ac
         full_response = str(full_response)
 
         if active_task_name == 'nifguide_task':
+            try:
+                expected_nifguide_qid = infer_expected_nif_question_id(
+                    nif_progress_df=user_nif_progress_df,
+                    user_query="",
+                )
+            except Exception as infer_err:
+                print(f"Warning: Failed to infer next NIF question ID after update: {infer_err}")
             full_response = enforce_nifguide_response_contract(
                 response_text=full_response,
                 expected_question_id=expected_nifguide_qid,
             )
             full_response = format_nifguide_choices_multiline(full_response)
+            full_response = remove_tool_calls(full_response)
 
         if active_task_name == 'nif_database_task':
             sql_from_latest_msg = None
@@ -5775,37 +5905,46 @@ def chat_bot(n_sub, human_chat_value, user_data, sid, user_nif_progress_json, ac
             elif isinstance(last_nif_query_result, dict):
                 nif_query_result_data = last_nif_query_result
 
-            trace_sections = []
-            if isinstance(sql_to_display, str) and sql_to_display.strip():
-                trace_sections.append(f"SQL executed:\n```sql\n{sql_to_display}\n```")
-            else:
-                trace_sections.append("SQL executed:\n```text\n(No SQL statement was captured for this turn)\n```")
+            # Force deterministic zero-row messaging for user clarity.
+            if (
+                isinstance(nif_query_result_data, dict)
+                and not nif_query_result_data.get("error")
+                and int(nif_query_result_data.get("row_count", 0) or 0) == 0
+            ):
+                full_response = "There are 0 records for that query."
 
-            if NIF_DB_SHOW_OUTPUT_RECORDS:
-                raw_output_to_display = None
-                trace_output_heading = "Output records"
-                if isinstance(nif_query_result_data, dict):
-                    raw_output_to_display = format_nif_query_result_for_llm(
-                        nif_query_result_data,
-                        preview_rows=NIF_DB_TRACE_PREVIEW_ROWS,
-                        include_row_preview=NIF_DB_TRACE_INCLUDE_ROWS,
-                    )
-                elif isinstance(tool_output_from_history, str) and tool_output_from_history.strip():
-                    raw_output_to_display = tool_output_from_history.strip()
-                    trace_output_heading = "Raw query output"
-                elif isinstance(full_response, str) and full_response.strip():
-                    raw_output_to_display = full_response.strip()
-                    trace_output_heading = "Raw query output"
-
-                if isinstance(raw_output_to_display, str) and raw_output_to_display.strip():
-                    trace_sections.append(f"{trace_output_heading}:\n```\n{raw_output_to_display}\n```")
-
-            if trace_sections:
-                response_clean = full_response.strip()
-                if response_clean:
-                    full_response = response_clean + "\n\n---\n" + "\n\n".join(trace_sections)
+            if NIF_DB_SHOW_SQL_TRACE:
+                trace_sections = []
+                if isinstance(sql_to_display, str) and sql_to_display.strip():
+                    trace_sections.append(f"SQL executed:\n```sql\n{sql_to_display}\n```")
                 else:
-                    full_response = "\n\n".join(trace_sections)
+                    trace_sections.append("SQL executed:\n```text\n(No SQL statement was captured for this turn)\n```")
+
+                if NIF_DB_SHOW_OUTPUT_RECORDS:
+                    raw_output_to_display = None
+                    trace_output_heading = "Output records"
+                    if isinstance(nif_query_result_data, dict):
+                        raw_output_to_display = format_nif_query_result_for_llm(
+                            nif_query_result_data,
+                            preview_rows=NIF_DB_TRACE_PREVIEW_ROWS,
+                            include_row_preview=NIF_DB_TRACE_INCLUDE_ROWS,
+                        )
+                    elif isinstance(tool_output_from_history, str) and tool_output_from_history.strip():
+                        raw_output_to_display = tool_output_from_history.strip()
+                        trace_output_heading = "Raw query output"
+                    elif isinstance(full_response, str) and full_response.strip():
+                        raw_output_to_display = full_response.strip()
+                        trace_output_heading = "Raw query output"
+
+                    if isinstance(raw_output_to_display, str) and raw_output_to_display.strip():
+                        trace_sections.append(f"{trace_output_heading}:\n```\n{raw_output_to_display}\n```")
+
+                if trace_sections:
+                    response_clean = full_response.strip()
+                    if response_clean:
+                        full_response = response_clean + "\n\n---\n" + "\n\n".join(trace_sections)
+                    else:
+                        full_response = "\n\n".join(trace_sections)
 
         # Remove 'DONE' from response if present (used for Langroid orchestration)
         full_response = full_response.replace('DONE.', '').replace('DONE', '')
@@ -5835,6 +5974,25 @@ def chat_bot(n_sub, human_chat_value, user_data, sid, user_nif_progress_json, ac
 
         # Write NIF progress data to dcc.Store
         if active_task_name == 'nifguide_task':
+            try:
+                autosave_result = maybe_autosave_nif_progress(
+                    user_data=user_data,
+                    session_id=sid,
+                    user_nif_progress_df=user_nif_progress_df,
+                    prior_last_question_id=prior_nif_last_qid,
+                    prior_last_answer=prior_nif_last_answer,
+                )
+                if (
+                    extra_output_bool
+                    and isinstance(autosave_result, dict)
+                    and autosave_result.get("saved")
+                ):
+                    full_response += (
+                        f"\n\n---\nAutosave: step {autosave_result.get('answered_step_count')} "
+                        f"saved ({autosave_result.get('autosave_file')})"
+                    )
+            except Exception as autosave_err:
+                print(f"Warning: NIF autosave failed: {autosave_err}")
             user_nif_progress_json = user_nif_progress_df.to_json(orient='split')
             return full_response, user_nif_progress_json, cleared_input_value, None, None
         else:
@@ -6284,8 +6442,8 @@ def clear_chat_history_and_file(n_clicks, is_collapse_open, user_data, active_si
             session_agent = session_task.agent
             session_agent.clear_history(start=-len(session_agent.message_history))
 
-    # Clear RAG v2 in-memory state/history for this user as well.
-    clear_nif_rag_user_state(active_user_email)
+    # Clear in-memory NIF backend autosave state for this user as well.
+    clear_nif_backend_user_state(active_user_email)
 
     # Clear history file
     message_content = ""
@@ -6474,6 +6632,7 @@ def api_health_live():
             "llm_provider": APP_LLM_PROVIDER,
             "llm_model": APP_LLM_MODEL,
             "llm_header_text": APP_LLM_HEADER_TEXT,
+            "dash_ui_qa_merge_enabled": DASH_UI_QA_MERGE,
             "timestamp_utc": dt.datetime.now(dt.UTC).isoformat(),
         }
     )
@@ -6810,4 +6969,4 @@ def serve_react_ui(path: str):
 #%% 6. RUN APP
 #############################################################################################################
 if __name__ == "__main__":
-    app.run(port=8052, debug=False)
+    app.run(port=int(os.getenv("DASH_PORT", "8052")), debug=False)

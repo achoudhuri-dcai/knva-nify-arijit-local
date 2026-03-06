@@ -40,29 +40,15 @@ Embedding config:
 Backward compatibility:
 - If `APP_LLM_PROVIDER` is not set, the app falls back to `VECTORSTORE_LLM_PROVIDER`.
 
-## New NIF RAG v2 engine
+## NIF Step By Step Engine
 
-A high-performance rule+RAG engine is available for **New NIF chat session** and is linked to the existing UI button.
+NIF Step by Step now runs in legacy mode only.
 
-- Keep existing behavior (default):
-  - `NIF_CHAT_ENGINE=legacy`
-- Enable new RAG engine:
-  - `NIF_CHAT_ENGINE=rag_v2`
-
-When enabled, the New NIF button uses a compiled knowledge pack built from:
-- `control_docs/Expert_System_Rules.xlsx` (sheet `Implementation v1`)
-- `control_docs/NIFTY Definitions v1.xlsx` (sheet `glossary`)
-- `control_docs/dropdown_references/`
-
-Compiled artifacts are written to:
-- `control_docs/compiled_nif_rag/question_graph.json`
-- `control_docs/compiled_nif_rag/question_cards.jsonl`
-- `control_docs/compiled_nif_rag/glossary_terms.jsonl`
-- `control_docs/compiled_nif_rag/dropdown_catalog.json`
-
-Tuning environment variables:
-- `NIF_RAG_MAX_AUTO_STEPS` (default `10`)
-- `NIF_RAG_RETRIEVAL_TOP_K` (default `4`)
+- `NIF_CHAT_ENGINE=legacy`
+- Rule flow source: `control_docs/Expert_System_Rules.xlsx` (sheet `Implementation v1`) injected into the NIF guide prompt as `<STEP_BY_STEP_RULES>`.
+- User progress persistence: user `.pkl` files plus Dash JSON state.
+- Backend autosave interval for in-progress NIFs:
+  - `NIF_BACKEND_SAVE_EVERY_STEPS` (default `5`)
 
 ## Parallel React UI
 
@@ -97,6 +83,16 @@ CORS allow-list for React dev origins:
 
 Feature flag for enhanced NIF step starter/load flow in React:
 - `REACT_NIF_STEP_ENHANCED=true`
+
+## Dash QA merge track
+
+For staged migration of Dash-only UI behavior from the QA repo into this codebase:
+- `DASH_UI_QA_MERGE=false` (default)
+- Set `DASH_UI_QA_MERGE=true` only when validating a gated merge slice.
+
+Implementation notes for this effort are tracked in:
+- `docs/merge_qa_plan.md`
+- `docs/merge_qa_callback_matrix.csv`
 
 ## Vectorstore maintenance
 
