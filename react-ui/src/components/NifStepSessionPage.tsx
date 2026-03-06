@@ -1,16 +1,17 @@
-import AddCircleOutlineRoundedIcon from "@mui/icons-material/AddCircleOutlineRounded";
-import AutorenewRoundedIcon from "@mui/icons-material/AutorenewRounded";
-import CheckCircleRoundedIcon from "@mui/icons-material/CheckCircleRounded";
-import CheckCircleOutlineRoundedIcon from "@mui/icons-material/CheckCircleOutlineRounded";
-import DownloadRoundedIcon from "@mui/icons-material/DownloadRounded";
-import FolderOpenRoundedIcon from "@mui/icons-material/FolderOpenRounded";
-import PersonRoundedIcon from "@mui/icons-material/PersonRounded";
-import RefreshRoundedIcon from "@mui/icons-material/RefreshRounded";
-import SearchRoundedIcon from "@mui/icons-material/SearchRounded";
-import SaveRoundedIcon from "@mui/icons-material/SaveRounded";
-import SendRoundedIcon from "@mui/icons-material/SendRounded";
-import SmartToyRoundedIcon from "@mui/icons-material/SmartToyRounded";
-import VisibilityRoundedIcon from "@mui/icons-material/VisibilityRounded";
+import {
+  faArrowsRotate,
+  faCircleCheck,
+  faCirclePlus,
+  faDownload,
+  faEye,
+  faFloppyDisk,
+  faFolderOpen,
+  faMagnifyingGlass,
+  faPaperPlane,
+  faRobot,
+  faRotate,
+  faUser,
+} from "@fortawesome/free-solid-svg-icons";
 import {
   Alert,
   Autocomplete,
@@ -45,6 +46,7 @@ import {
   startNewNifSession,
   submitChatTurn,
 } from "../api/client";
+import FaIcon from "./FaIcon";
 import NifProgressGridDialog from "./NifProgressGridDialog";
 import type { ChatMessage, ModuleConfig, NifSessionActionResponse, NifStepOption, SavedNifFileOption } from "../types";
 
@@ -607,7 +609,7 @@ export default function NifStepSessionPage({
             <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
               <Button
                 variant="contained"
-                startIcon={<AddCircleOutlineRoundedIcon />}
+                startIcon={<FaIcon icon={faCirclePlus} />}
                 disabled={isAnyBusy}
                 onClick={() => void handleNewNifSession()}
               >
@@ -615,7 +617,7 @@ export default function NifStepSessionPage({
               </Button>
               <Button
                 variant="outlined"
-                startIcon={<FolderOpenRoundedIcon />}
+                startIcon={<FaIcon icon={faFolderOpen} />}
                 disabled={isAnyBusy}
                 onClick={() => void handleLoadMode()}
               >
@@ -680,7 +682,7 @@ export default function NifStepSessionPage({
             >
               {message.role === "user" ? null : (
                 <Avatar className="chat-avatar chat-avatar-bot">
-                  <SmartToyRoundedIcon fontSize="small" />
+                  <FaIcon icon={faRobot} />
                 </Avatar>
               )}
               <Paper
@@ -701,7 +703,7 @@ export default function NifStepSessionPage({
                       InputProps={{
                         startAdornment: (
                           <InputAdornment position="start">
-                            <SearchRoundedIcon fontSize="small" />
+                            <FaIcon icon={faMagnifyingGlass} />
                           </InputAdornment>
                         ),
                       }}
@@ -717,9 +719,9 @@ export default function NifStepSessionPage({
                             onClick={() => toggleInlineOption(option)}
                           >
                             {selected ? (
-                              <CheckCircleRoundedIcon fontSize="small" className="inline-option-icon" />
+                              <FaIcon icon={faCircleCheck} className="inline-option-icon" />
                             ) : (
-                              <CheckCircleOutlineRoundedIcon fontSize="small" className="inline-option-icon" />
+                              <FaIcon icon={faCircleCheck} className="inline-option-icon" />
                             )}
                             <Typography variant="caption" className="inline-option-id">
                               {option.id}.
@@ -771,7 +773,7 @@ export default function NifStepSessionPage({
               </Paper>
               {message.role === "user" ? (
                 <Avatar className="chat-avatar chat-avatar-user">
-                  <PersonRoundedIcon fontSize="small" />
+                  <FaIcon icon={faUser} />
                 </Avatar>
               ) : null}
             </Box>
@@ -805,7 +807,7 @@ export default function NifStepSessionPage({
 
           <Button
             variant="contained"
-            endIcon={busy ? <CircularProgress size={14} color="inherit" /> : <SendRoundedIcon />}
+            endIcon={busy ? <CircularProgress size={14} color="inherit" /> : <FaIcon icon={faPaperPlane} />}
             onClick={() => void onSubmit()}
             disabled={isAnyBusy || !canTypeInChat || !input.trim()}
           >
@@ -817,7 +819,7 @@ export default function NifStepSessionPage({
           <Tooltip title="Save NIF progress">
             <span>
               <IconButton className="step-action-icon" onClick={() => setShowSaveDialog(true)} disabled={isAnyBusy}>
-                <SaveRoundedIcon fontSize="small" />
+                <FaIcon icon={faFloppyDisk} />
               </IconButton>
             </span>
           </Tooltip>
@@ -825,7 +827,7 @@ export default function NifStepSessionPage({
           <Tooltip title="Show progress">
             <span>
               <IconButton className="step-action-icon" onClick={() => void handleOpenShowProgress()} disabled={isAnyBusy}>
-                <VisibilityRoundedIcon fontSize="small" />
+                <FaIcon icon={faEye} />
               </IconButton>
             </span>
           </Tooltip>
@@ -833,7 +835,7 @@ export default function NifStepSessionPage({
           <Tooltip title="Reload NIF rules">
             <span>
               <IconButton className="step-action-icon" onClick={() => void handleReloadNif()} disabled={isAnyBusy}>
-                <AutorenewRoundedIcon fontSize="small" />
+                <FaIcon icon={faRotate} />
               </IconButton>
             </span>
           </Tooltip>
@@ -841,7 +843,7 @@ export default function NifStepSessionPage({
           <Tooltip title="Download file">
             <span>
               <IconButton className="step-action-icon" onClick={() => void handleDownloadFile()} disabled={isAnyBusy}>
-                <DownloadRoundedIcon fontSize="small" />
+                <FaIcon icon={faDownload} />
               </IconButton>
             </span>
           </Tooltip>
@@ -849,7 +851,7 @@ export default function NifStepSessionPage({
           <Tooltip title="Refresh page">
             <span>
               <IconButton className="step-action-icon" onClick={() => void handleRefreshPage()} disabled={isAnyBusy}>
-                <RefreshRoundedIcon fontSize="small" />
+                <FaIcon icon={faArrowsRotate} />
               </IconButton>
             </span>
           </Tooltip>

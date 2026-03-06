@@ -1,6 +1,4 @@
-import PersonRoundedIcon from "@mui/icons-material/PersonRounded";
-import SendRoundedIcon from "@mui/icons-material/SendRounded";
-import SmartToyRoundedIcon from "@mui/icons-material/SmartToyRounded";
+import { faPaperPlane, faRobot, faUser } from "@fortawesome/free-solid-svg-icons";
 import { Alert, Avatar, Box, Button, CircularProgress, Link, Paper, Stack, TextField, Typography } from "@mui/material";
 import { useEffect, useMemo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
@@ -8,6 +6,7 @@ import type { Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 
 import { selectModule, submitChatTurn } from "../api/client";
+import FaIcon from "./FaIcon";
 import NifSearchQueryPanel from "./NifSearchQueryPanel";
 import type { ChatMessage, ModuleConfig } from "../types";
 
@@ -313,7 +312,7 @@ export default function ChatModulePage({
                 >
                   {message.role === "user" ? null : (
                     <Avatar className="chat-avatar chat-avatar-bot">
-                      <SmartToyRoundedIcon fontSize="small" />
+                      <FaIcon icon={faRobot} />
                     </Avatar>
                   )}
                   <Paper className={`chat-bubble ${message.role === "user" ? "chat-bubble-user" : "chat-bubble-assistant"}`} elevation={0}>
@@ -331,7 +330,7 @@ export default function ChatModulePage({
                   </Paper>
                   {message.role === "user" ? (
                     <Avatar className="chat-avatar chat-avatar-user">
-                      <PersonRoundedIcon fontSize="small" />
+                      <FaIcon icon={faUser} />
                     </Avatar>
                   ) : null}
                 </Box>
@@ -366,7 +365,7 @@ export default function ChatModulePage({
         />
         <Button
           variant="contained"
-          endIcon={busy ? <CircularProgress size={14} color="inherit" /> : <SendRoundedIcon />}
+          endIcon={busy ? <CircularProgress size={14} color="inherit" /> : <FaIcon icon={faPaperPlane} />}
           onClick={() => void onSubmit()}
           disabled={module.key === "field" || busy || !input.trim()}
         >

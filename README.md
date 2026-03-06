@@ -76,6 +76,8 @@ React UI dev run:
 2. Start React app:
    - `cd react-ui`
    - `npm install`
+   - if backend uses a non-default port, set proxy target in `react-ui/.env.local`:
+     - `VITE_API_PROXY_TARGET=http://localhost:<DASH_PORT>`
    - `npm run dev`
 
 CORS allow-list for React dev origins:

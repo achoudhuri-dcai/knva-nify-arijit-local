@@ -1,13 +1,14 @@
-import SearchRoundedIcon from "@mui/icons-material/SearchRounded";
-import SchoolRoundedIcon from "@mui/icons-material/SchoolRounded";
-import ChecklistRoundedIcon from "@mui/icons-material/ChecklistRounded";
-import QuizRoundedIcon from "@mui/icons-material/QuizRounded";
-import DarkModeRoundedIcon from "@mui/icons-material/DarkModeRounded";
-import LightModeRoundedIcon from "@mui/icons-material/LightModeRounded";
-import CloseRoundedIcon from "@mui/icons-material/CloseRounded";
-import ContactSupportRoundedIcon from "@mui/icons-material/ContactSupportRounded";
-import MenuOpenRoundedIcon from "@mui/icons-material/MenuOpenRounded";
-import MenuRoundedIcon from "@mui/icons-material/MenuRounded";
+import {
+  faBars,
+  faClipboardCheck,
+  faCircleQuestion,
+  faGraduationCap,
+  faMagnifyingGlass,
+  faMoon,
+  faSun,
+  faXmark,
+  faAnglesLeft,
+} from "@fortawesome/free-solid-svg-icons";
 import { Box, Button, Drawer, IconButton, Paper, Stack, Tooltip, Typography } from "@mui/material";
 import { Navigate, NavLink, Route, Routes, useLocation } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
@@ -15,6 +16,7 @@ import { useEffect, useMemo, useState } from "react";
 import { createSession, fetchHealthLive } from "./api/client";
 import helpContentJson from "./config/help-content.json";
 import ChatModulePage from "./components/ChatModulePage";
+import FaIcon from "./components/FaIcon";
 import NifStepSessionPage from "./components/NifStepSessionPage";
 import type { ModuleConfig, ModuleKey } from "./types";
 
@@ -194,26 +196,26 @@ export default function App() {
 
       <Paper className="app-header" elevation={0}>
         <Stack spacing={0.1} className="header-brand">
-          <img src="/kellanova-logo.svg" alt="Kellanova" className="header-logo" />
+          <img src="/kellanova-logo-white.png" alt="Kellanova" className="header-logo" />
           <Typography component="div" className="header-title">
             New Item Form Assistant
           </Typography>
         </Stack>
         <Stack spacing={0.2} alignItems="flex-end" className="header-meta">
           <a href={DCAI_HOME_URL} target="_blank" rel="noreferrer" className="header-powered-link">
-            <Typography component="span" variant="caption" color="text.secondary" className="header-powered-text">
+            <Typography component="span" variant="caption" color="inherit" className="header-powered-text">
               built and powered by
             </Typography>
-            <img src="/dcai-horizontal-darkblue.png" alt="Demand Chain AI" className="header-dcai-logo header-dcai-logo-light" />
+            <img src="/dcai-horizontal-whiteblue.png" alt="Demand Chain AI" className="header-dcai-logo header-dcai-logo-light" />
             <img src="/dcai-horizontal-whiteblue.png" alt="Demand Chain AI" className="header-dcai-logo header-dcai-logo-dark" />
           </a>
           <Stack spacing={0.1} alignItems="flex-end">
             <Stack direction="row" spacing={0.6} alignItems="center">
-              <Typography variant="caption" color="text.secondary">
+              <Typography variant="caption" color="inherit">
                 Session: {sessionId || "loading"}
               </Typography>
             </Stack>
-            <Typography variant="caption" color="text.secondary">
+            <Typography variant="caption" color="inherit">
               {llmHeaderText}
             </Typography>
           </Stack>
@@ -236,19 +238,19 @@ export default function App() {
                   onClick={() => setIsNavExpanded((prev) => !prev)}
                   aria-label={isNavExpanded ? "Collapse menu" : "Expand menu"}
                 >
-                  {isNavExpanded ? <MenuOpenRoundedIcon fontSize="small" /> : <MenuRoundedIcon fontSize="small" />}
+                  {isNavExpanded ? <FaIcon icon={faAnglesLeft} /> : <FaIcon icon={faBars} />}
                 </IconButton>
               </Tooltip>
             </Stack>
             <Box className="side-nav-menu-list">
               {MODULES.map((module) => {
                 const icon = module.key === "training"
-                  ? <SchoolRoundedIcon fontSize="small" />
+                  ? <FaIcon icon={faGraduationCap} />
                   : module.key === "step"
-                    ? <ChecklistRoundedIcon fontSize="small" />
+                    ? <FaIcon icon={faClipboardCheck} />
                     : module.key === "search"
-                      ? <SearchRoundedIcon fontSize="small" />
-                      : <QuizRoundedIcon fontSize="small" />;
+                      ? <FaIcon icon={faMagnifyingGlass} />
+                      : <FaIcon icon={faCircleQuestion} />;
 
                 return (
                   <Button
@@ -282,7 +284,7 @@ export default function App() {
                   onClick={() => setIsDarkMode((prev) => !prev)}
                   aria-label={isDarkMode ? "Switch to day mode" : "Switch to dark mode"}
                 >
-                  {isDarkMode ? <LightModeRoundedIcon fontSize="small" /> : <DarkModeRoundedIcon fontSize="small" />}
+                  {isDarkMode ? <FaIcon icon={faSun} /> : <FaIcon icon={faMoon} />}
                 </IconButton>
               </Tooltip>
             </Stack>
@@ -326,7 +328,7 @@ export default function App() {
             onClick={() => setHelpOpen(true)}
             aria-label="Open help"
           >
-            <ContactSupportRoundedIcon fontSize="small" />
+            <FaIcon icon={faCircleQuestion} />
           </IconButton>
         </Tooltip>
       </Paper>
@@ -348,7 +350,7 @@ export default function App() {
           </Stack>
           <Tooltip title="Close help">
             <IconButton size="small" onClick={() => setHelpOpen(false)} aria-label="Close help panel">
-              <CloseRoundedIcon fontSize="small" />
+              <FaIcon icon={faXmark} />
             </IconButton>
           </Tooltip>
         </Stack>
