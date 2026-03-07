@@ -1812,6 +1812,231 @@ def build_nifguide_system_message(
     user_query: str,
     prompt_mode: Optional[str] = None,
 ) -> str:
+    if NIF_GUIDE_LEGACY_SOURCE == "qa":
+        return f'''
+            You are an expert in Kellanova's New Item Form (NIF). This form is used
+            to specify new products or variations of existing products. Your role
+            is to guide the user through the 'Requestor - Project Initiation'
+            section of the NIF, which contains the PROJECT_INITIATION_FIELDS listed
+            here:
+                <PROJECT_INITIATION_FIELDS>
+                {list(nif_fields_req_init_template['field_name_and_number'])}
+                </PROJECT_INITIATION_FIELDS>
+
+            To do this, you will refer to the STEP_BY_STEP_RULES table which contains
+            the following columns:
+                - Question ID: the unique identifier for this question. Do NOT tell the user
+                  this identifier; it is only for internal use.
+                - Question: the question to ask the user.
+                - Instructions: the instructions you will follow based on the user's response.
+
+            See the QUESTION FLOW PROTOCOL below for how to use this.
+
+            {llm_instruction_scope_of_discussion}
+
+            # STRICT ADHERENCE TO RULES
+            You MUST follow these rules without exception:
+            - Process EXACTLY ONE row from STEP_BY_STEP_RULES at a time
+            - NEVER skip ahead or process multiple rows simultaneously
+            - NEVER proceed to the next question until the current row is complete
+            - ALWAYS follow the "Go to" instruction exactly as specified
+            - Do NOT improvise or interpret instructions creatively - follow them literally
+            - If the instructions contain a list of possible values or point to a dropdown
+              reference list, you CANNOT accept an answer that is not in the list. If the
+              user refuses to select an option from the list, tell them you cannot continue
+              the walkthrough and suggest that they contact the Supply Chain Data Governance
+              team at scdatagov@kellanova.com.
+            - For any multi-word strings or specific category labels, you must match the value
+              exactly as written. Do not treat a shorter string (e.g., "Straight Case") as a
+              match for a longer, more specific string (e.g., "Straight Case Repack/RCP").
+              They are distinct entities.
+
+            # INTERACTION WITH THE USER
+            Begin with a simple greeting and state your role.
+
+            You will be told at the start of the conversation whether the user is starting
+            a new NIF or continuing an in-progress NIF.
+
+            If the user is starting a new NIF, say "Please Note: {nifguide_boilerplate}".
+            Then start the walkthrough with the first question in STEP_BY_STEP_RULES.
+
+            If the user is resuming a NIF in progress, you will be told which question ID
+            was last answered and the last answer that was given. Go to the row in the
+            STEP_BY_STEP_RULES for the question ID that was last answered and follow the
+            instructions according to the last answer that was given.
+
+            When proceeding, follow the QUESTION FLOW PROTOCOL:
+
+            ## QUESTION FLOW PROTOCOL
+            1. Ask the question from the "Question" column. DO NOT state the question number or question ID.
+                - Strictly use numbers to represent all the options in the list, even for yes or no questions,
+                and use newline characters to separate the rows always no matter how many options are present.
+
+                - If the question includes a list of possible values, write this as a Markdown
+                table with two columns, Number and Value, like this:
+                        <newline>
+                        | Number    | Value           |<newline>
+                        |:----------|:----------------|<newline>
+                        | 1.        | <option 1>      |<newline>
+                        | 2.        | <option 2>      |<newline>
+                        | 3.        | <option 3>      |<newline>
+                        <etc.>
+                        <newline>
+                If the user answers with a number, use the item corresponding to that number
+                in the list you provided.
+
+                - If the question includes rules about the answer (e.g., "only numbers and dash allowed",
+                  "max 40 characters"), tell the user this requirement when you ask the question and
+                  do not go to the next question until you receive an answer that matches the requirement.
+
+            2. Wait for the user's response - do not proceed without it - except for the following:
+                - Exception 1: if the instructions say this question is optional under certain
+                conditions, check those conditions. If those conditions apply, the user can submit
+                the words "blank", "none", or similar.
+                - Exception 2: if "Question" column says 'None', execute instructions immediately
+                without asking.
+
+            3. Execute instructions ONLY for the current Question ID.
+
+            4. Call the 'update_nif_progress' function at least once for each question.
+               The arguments to this function are:
+                   **LAST_QUESTION_ID**: the Question ID of the question you just asked.
+                   **LAST_VALUE**:
+                       - IF the instructions are to update a field with a specific value
+                       indicated by <'VALUE'>, pass this value (without the angle brackets).
+                       - ELSE IF the instructions are to update a freeform field indicated by
+                       <FREEFORM>, pass the user's literal answer after validation.
+                       - ELSE IF the instructions do not indicate a field to update, pass
+                       "Go to <Question ID>" using the next Question ID according to the
+                       instructions.
+                   **FIELD_NUMBER**:
+                       - ONLY use this argument if the instructions include updating a field
+                       indicated by "Field Name" (Field Number). Pass the field number that
+                       appears inside the parenthesis.
+                       - if the instructions do not indicate a field to update, pass
+                       FIELD_NUMBER=None.
+
+               If the instructions are to update multiple fields, call the function 'update_nif_progress'
+               for EACH field that requires an update.
+
+            6. Only then proceed to the next question.
+
+            # 6. Confirm: "✓ Recorded [FIELD_NAME]. Moving to Question [NEXT_ID]."
+
+            - If the user asks about any of their previous answers (e.g., "what is the product type"),
+            do the following:
+                1. Call the function 'check_nif_progress'.
+                2. WAIT FOR THE FUNCTION TO RETURN A RESULT.
+                3. The function will produce a table with two columns: Field and Answer.
+                Restate the contents of the table for the user as if you knew it already.
+
+            - If the user asks to go back to a previous question, you may do so, but you must
+            follow the instructions again one-at-a-time from that question. DO NOT ASSUME
+            that the answers to subsequent questions are the same as before.
+
+            - If the user asks for clarification about a question, refer to the GLOSSARY and
+            provide the definitions of relevant terms.
+
+            <STEP_BY_STEP_RULES>
+            {expert_system_rules_md}
+            </STEP_BY_STEP_RULES>
+
+            <GLOSSARY>
+            {glossary_and_db_terms_dict}
+            </GLOSSARY>
+
+            ## PARSING INSTRUCTIONS (CRITICAL)
+            For each instruction in the "Instructions" column:
+            1. Dropdown Lists: "Display dd: reference list [NAME]"
+               - Look up [NAME] in DROPDOWN REFERENCE LISTS below
+               - Always print these as a Markdown table with two columns, Number and Value,
+               like this:
+                       | Number    | Value           |
+                       |:----------|:----------------|
+                       | 1.        | <option 1>      |
+                       | 2.        | <option 2>      |
+                       | 3.        | <option 3>      |
+                       <etc.>
+               - If the user answers with a number, use the item corresponding to that number
+               in the list you provided.
+            2. Field Updates: "FIELD_NAME" (FIELD_NUMBER)
+               - FIELD_NUMBER is the required parameter for 'update_nif_progress'
+            3. Value Types:
+               - This tells you what to use for the "LAST_VALUE" parameter for 'update_nif_progress'
+               - <'VALUE'>: Use this EXACT string (without angle brackets).
+               - <FREEFORM>: Use the user's literal answer after validation. These are NOT optional
+               fields unless the instructions explicitly say so.
+            4. Validation:
+               If the instructions are to take a <FREEFORM> answer and they include rules
+               about the answer (e.g., "must be numeric", "maximum of 40 characters"),
+               check the user's answer before proceeding. If the answer does not adhere to the
+               rules, suggest a modified answer that does adhere to the rules. Ask if the user
+               would like to use your suggestion or provide another answer.
+               DO NOT PROCEED UNTIL THE ANSWER ADHERES TO THE RULES.
+            5. Navigation: "Go to [Question ID]"
+               - This specifies your NEXT question
+               - If conditional (if/then), follow the matching condition
+               - If no "Go to", proceed to the next row in the STEP_BY_STEP_RULES
+            6. Multiple Fields:
+               - Call 'update_nif_progress' separately for EACH field
+               - Process in order listed
+
+            ### DROPDOWN REFERENCE LISTS
+            <LIM_USERS>
+            {ddref_lim_users_md}
+            </LIM_USERS>
+
+            <RDL_CATEGORIES>
+            {ddref_rdl_categories_md}
+            </RDL_CATEGORIES>
+
+            <MATERIAL_PREFIX>
+            {ddref_material_prefix_md}
+            </MATERIAL_PREFIX>
+
+            <ADDITIONAL_PACKAGING_LAUNCH>
+            {ddref_addnl_packaging_md}
+            </ADDITIONAL_PACKAGING_LAUNCH>
+
+            <PRIVATE_LABEL>
+            {ddref_private_label_md}
+            </PRIVATE_LABEL>
+
+            <DESIGNATED_CUSTOMER_NAME>
+            {ddref_desig_cust_md}
+            </DESIGNATED_CUSTOMER_NAME>
+
+            ### FUNCTION CALLING REQUIREMENTS
+            When calling 'update_nif_progress':
+            - Call IMMEDIATELY after collecting each field value
+            - Use parameters: LAST_QUESTION_ID, LAST_VALUE, and FIELD_NUMBER (only if specified)
+            - Do NOT proceed until function returns successfully
+            - Once the function returns valid output (e.g. "Field ... updated"), STOP calling the function for this step and proceed to the next question.
+            - LAST_VALUE format:
+              * If the instructions indicate a specific value <'VALUE'>: use this exact value
+              without angle brackets.
+              * If the instructions indicate <FREEFORM>: user's validated literal answer.
+
+            # PROHIBITED BEHAVIORS
+            You MUST NOT:
+            - Call 'update_nif_progress' more than once for the same question/value pair.
+            - Summarize or skip steps
+            - Ask multiple questions from different rows simultaneously
+            - Assume answers or pre-fill fields
+            - Deviate from "Go to" instructions
+            - Proceed with invalid or unclear user responses
+
+            # SELF-VERIFICATION BEFORE PROCEEDING
+            Before each new question, verify:
+            □ If the next question's response is given as a list or not?
+            □ Asked question from current row?
+            □ Received and validated user answer?
+            □ Called 'update_nif_progress' for all required fields?
+            □ Identified correct next Question ID?
+
+            If any item is unchecked, DO NOT PROCEED.
+        '''
+
     mode = (prompt_mode or NIF_GUIDE_PROMPT_MODE).strip().lower()
     if mode not in {"legacy", "compact"}:
         mode = "compact"
@@ -2656,20 +2881,7 @@ class check_nif_progress_tool(lr.agent.ToolMessage):
     FIELD_NAME:str = 'ALL'      # The name of the field to return. If 'ALL', show all.
 
     def handle(self):
-        # active_user_nif_progress = active_user_nif_progress_df[['_agentref_last_question_answered', '_agentref_last_answer_given']].to_dict(orient='list')
-        active_user_nif_progress = active_user_nif_progress_df.to_dict(orient='list')
-        # active_user_nif_progress = active_user_nif_progress_df.to_markdown()
-
-        if self.FIELD_NAME == 'ALL':
-            return_string = f'''
-                <ACTIVE_NIF_PROGRESS>
-                {active_user_nif_progress}
-                </ACTIVE_NIF_PROGRESS>
-            '''
-        else:
-            return_string = active_user_nif_progress.get(self.FIELD_NAME, 'Invalid Field Name')
-
-        return return_string
+        return None
 
 class update_nif_progress_tool(lr.agent.ToolMessage):
     """Tool to update values in a pandas DataFrame"""
@@ -2694,12 +2906,16 @@ class nif_guide_update_agent(lr.ChatAgent):
 
         # Enable the tools
         self.enable_message(update_nif_progress_tool)
+        self.enable_message(check_nif_progress_tool)
 
     def update_nif_progress(self, msg: update_nif_progress_tool) -> str:
         # Update reference columns
         self.df['_agentref_last_question_answered'] = msg.LAST_QUESTION_ID
         self.df['_agentref_last_answer_given'] = msg.LAST_VALUE
         print(f"Last question updated to '{msg.LAST_QUESTION_ID}'.")
+
+        nif_progress_colname = None
+        value_to_update = msg.LAST_VALUE
 
         # Check that FIELD_NUMBER provided is valid
         valid_field_numbers = list(nif_fields_req_init_template['field_number'])
@@ -2710,14 +2926,70 @@ class nif_guide_update_agent(lr.ChatAgent):
                 _field_number = (nif_fields_req_init_template['field_number'] == msg.FIELD_NUMBER)
                 nif_progress_colname = nif_fields_req_init_template.loc[_field_number, 'field_name_and_number'].item()
 
+                # Override value for Product Sub Type (1010) to QA-equivalent mapping.
+                if msg.FIELD_NUMBER == 1010:
+                    if str(msg.LAST_VALUE).strip().upper() == 'YES':
+                        value_to_update = 'Package and pouch/inner item with UPCs'
+                    elif str(msg.LAST_VALUE).strip().upper() == 'NO':
+                        value_to_update = 'Package with UPC'
+
                 # Update
-                self.df[nif_progress_colname] = msg.LAST_VALUE
-                print(f"Field '{nif_progress_colname}' updated with value '{msg.LAST_VALUE}'.")
+                self.df[nif_progress_colname] = value_to_update
+                print(f"Field '{nif_progress_colname}' updated with value '{value_to_update}'.")
+
+                # Auto-populate Business Area (1305) when LIM (1006) is set.
+                if msg.FIELD_NUMBER == 1006:
+                    _ba_field_number = (nif_fields_req_init_template['field_number'] == 1305)
+                    if _ba_field_number.any():
+                        ba_colname = nif_fields_req_init_template.loc[_ba_field_number, 'field_name_and_number'].item()
+                        self.df[ba_colname] = 'KELLANOVA'
+                        print(f"Field '{ba_colname}' auto-updated with value 'KELLANOVA'.")
 
             else:
                 raise Exception(f"ERROR: Field number provided ({msg.FIELD_NUMBER}) is not valid.")
 
-        return None
+        if msg.LAST_QUESTION_ID == 'END_REQ_INITIATE_Q':
+            self.df = self.df.replace(string_indicating_not_yet_determined, string_indicating_not_required)
+
+        if msg.FIELD_NUMBER:
+            return f"Field '{nif_progress_colname}' updated with value '{value_to_update}'."
+        return f"Question '{msg.LAST_QUESTION_ID}' recorded."
+
+    def check_nif_progress(self, msg: check_nif_progress_tool) -> str:
+        if self.df.empty:
+            return "No NIF progress data available."
+
+        try:
+            cols_to_drop = ['_agentref_last_question_answered', '_agentref_last_answer_given']
+            existing_cols_to_drop = [col for col in cols_to_drop if col in self.df.columns]
+            if existing_cols_to_drop:
+                df_for_display = self.df.drop(columns=existing_cols_to_drop)
+            else:
+                df_for_display = self.df.copy()
+
+            field_name = getattr(msg, 'FIELD_NAME', 'ALL')
+            if field_name != 'ALL':
+                if field_name in df_for_display.columns:
+                    df_for_display = df_for_display[[field_name]]
+                else:
+                    return f"Field '{field_name}' not found in NIF progress data."
+
+            df_transposed = df_for_display.transpose()
+            if df_transposed.empty or df_transposed.shape[1] == 0:
+                return "No progress data to display."
+
+            try:
+                df_transposed_answers = df_transposed.loc[
+                    df_transposed.iloc[:, 0] != string_indicating_not_yet_determined
+                ]
+            except Exception as e:
+                return f"Error processing progress data: {str(e)}"
+
+            if df_transposed_answers.empty:
+                return "No answers recorded yet."
+            return df_transposed_answers.to_markdown()
+        except Exception as e:
+            return f"Error retrieving NIF progress: {str(e)}"
 
     def get_dataframe(self) -> pd.DataFrame:
          """Return the current state of the DataFrame"""
@@ -2736,6 +3008,16 @@ remove the warning about "stuck for 5 steps" by either setting task.run(turns=1)
 or instructing the agent to say 'DONE' have BROKEN THE DF UPDATE FUNCTIONALITY!
 I am leaving the stuck for 5 steps warning because it does not interfere with
 anything.
+'''
+nifguide_boilerplate = f'''
+- If any of these NEW situations apply to this product, it could take 3 weeks to create the new value. Please contact Supply Chain Data Governance at SCDataGov@kellanova.com:
+    - New Brand
+    - New Planning method in TPM
+    - New Food Form
+    - New Type
+    - New Size
+    - New Package Price.
+- If only a New Sub Brand is needed, then please submit a KNA Request Product Value form in Evolve.
 '''
 # nifguide_agent_name = 'NIFGuideAgent'     # Hard coding this in create_task() function
 
@@ -5419,11 +5701,17 @@ def start_new_nif_session(user_data, active_sid, current_clicks):
     display_text = ""
     reset_nif_backend_save_state(active_sid, active_user_email)
 
-    submit_text = "Start a new NIF with field 'LIM'"
+    if NIF_GUIDE_LEGACY_SOURCE == "qa":
+        submit_text = "Start a new NIF"
+    else:
+        submit_text = "Start a new NIF with field 'LIM'"
     new_clicks = (current_clicks or 0) + 1
 
     user_nif_progress_df = create_active_user_nif_progress_data()
-    requestor_date = f"{dt.datetime.now().strftime('%Y%m%d_%H%M%S')}"
+    if NIF_GUIDE_LEGACY_SOURCE == "qa":
+        requestor_date = f"{dt.datetime.now().strftime('%Y%m%d')}"
+    else:
+        requestor_date = f"{dt.datetime.now().strftime('%Y%m%d_%H%M%S')}"
 
     user_nif_progress_df = update_nif_progress_data(user_nif_progress_df, "START REQ INITIATE", active_user_name, 1001)
     user_nif_progress_df = update_nif_progress_data(user_nif_progress_df, "START REQ INITIATE", active_user_email, 1002)
@@ -5989,6 +6277,9 @@ def chat_bot(n_sub, human_chat_value, user_data, sid, user_nif_progress_json, ac
             else:
                 session_task.run(human_chat_value, session_id=sid)
         except Exception as err:
+            if active_task_name == 'nifguide_task' and use_qa_legacy_nifguide:
+                user_nif_progress_json = user_nif_progress_df.to_json(orient='split')
+                return general_llm_error_message, user_nif_progress_json, '', None, None
             if active_task_name == 'nif_database_task':
                 failure_hint = (
                     "For Search NIF, this usually means model credentials/provider "
@@ -6025,60 +6316,81 @@ def chat_bot(n_sub, human_chat_value, user_data, sid, user_nif_progress_json, ac
             full_response = last_assistant_message.content
             function_call = getattr(last_assistant_message, "function_call", None)
             function_args_raw = getattr(function_call, "arguments", None)
-            function_args = parse_function_arguments(function_args_raw)
 
-            if active_task_name == 'nif_database_task':
-                content_from_args = None
-                sql_from_args = None
-                if isinstance(function_args, dict):
-                    content_from_args = function_args.get('content')
-                    sql_from_args = function_args.get("SQL_QUERY")
-
-                # 1) Prefer non-empty final content from orchestration tool calls.
-                if isinstance(content_from_args, str) and content_from_args.strip():
-                    full_response = content_from_args
-
-                # 2) If no content, but SQL is present, execute SQL tool directly.
-                elif isinstance(sql_from_args, str) and sql_from_args.strip():
+            if use_qa_legacy_nifguide and active_task_name == 'nifguide_task':
+                qa_content = None
+                if isinstance(function_args_raw, dict):
+                    qa_content = function_args_raw.get("content")
+                elif isinstance(function_args_raw, str) and function_args_raw.strip():
                     try:
-                        full_response = query_nif_db_tool_2(SQL_QUERY=sql_from_args).handle()
-                    except Exception as err:
-                        full_response = f"Search NIF tool execution error: {err}"
-
-                # 3) Final fallback: use latest non-empty message content.
-                elif full_response is None or str(full_response).strip() == "":
-                    try:
-                        last_msg_content = getattr(session_agent.message_history[-1], "content", None)
-                        if isinstance(last_msg_content, str) and last_msg_content.strip():
-                            full_response = last_msg_content
+                        qa_args = json.loads(function_args_raw)
+                        if isinstance(qa_args, dict):
+                            qa_content = qa_args.get("content")
                     except Exception:
-                        pass
+                        qa_content = None
+
+                if isinstance(qa_content, str) and qa_content.strip():
+                    full_response = qa_content
+                elif full_response is None or not str(full_response).strip():
+                    full_response = general_llm_error_message
             else:
-                # Non-database tasks: use routed content when present.
-                if isinstance(function_args, dict):
-                    content_from_args = function_args.get('content')
+                function_args = parse_function_arguments(function_args_raw)
+
+                if active_task_name == 'nif_database_task':
+                    content_from_args = None
+                    sql_from_args = None
+                    if isinstance(function_args, dict):
+                        content_from_args = function_args.get('content')
+                        sql_from_args = function_args.get("SQL_QUERY")
+
+                    # 1) Prefer non-empty final content from orchestration tool calls.
                     if isinstance(content_from_args, str) and content_from_args.strip():
                         full_response = content_from_args
 
-            if full_response is None:
-                full_response = ""
+                    # 2) If no content, but SQL is present, execute SQL tool directly.
+                    elif isinstance(sql_from_args, str) and sql_from_args.strip():
+                        try:
+                            full_response = query_nif_db_tool_2(SQL_QUERY=sql_from_args).handle()
+                        except Exception as err:
+                            full_response = f"Search NIF tool execution error: {err}"
+
+                    # 3) Final fallback: use latest non-empty message content.
+                    elif full_response is None or str(full_response).strip() == "":
+                        try:
+                            last_msg_content = getattr(session_agent.message_history[-1], "content", None)
+                            if isinstance(last_msg_content, str) and last_msg_content.strip():
+                                full_response = last_msg_content
+                        except Exception:
+                            pass
+                else:
+                    # Non-database tasks: use routed content when present.
+                    if isinstance(function_args, dict):
+                        content_from_args = function_args.get('content')
+                        if isinstance(content_from_args, str) and content_from_args.strip():
+                            full_response = content_from_args
+
+                if full_response is None:
+                    full_response = ""
 
         full_response = str(full_response)
 
         if active_task_name == 'nifguide_task':
-            try:
-                expected_nifguide_qid = infer_expected_nif_question_id(
-                    nif_progress_df=user_nif_progress_df,
-                    user_query="",
+            if use_qa_legacy_nifguide:
+                full_response = str(full_response)
+            else:
+                try:
+                    expected_nifguide_qid = infer_expected_nif_question_id(
+                        nif_progress_df=user_nif_progress_df,
+                        user_query="",
+                    )
+                except Exception as infer_err:
+                    print(f"Warning: Failed to infer next NIF question ID after update: {infer_err}")
+                full_response = enforce_nifguide_response_contract(
+                    response_text=full_response,
+                    expected_question_id=expected_nifguide_qid,
                 )
-            except Exception as infer_err:
-                print(f"Warning: Failed to infer next NIF question ID after update: {infer_err}")
-            full_response = enforce_nifguide_response_contract(
-                response_text=full_response,
-                expected_question_id=expected_nifguide_qid,
-            )
-            full_response = format_nifguide_choices_multiline(full_response)
-            full_response = remove_tool_calls(full_response)
+                full_response = format_nifguide_choices_multiline(full_response)
+                full_response = remove_tool_calls(full_response)
 
         if active_task_name == 'nif_database_task':
             sql_from_latest_msg = None

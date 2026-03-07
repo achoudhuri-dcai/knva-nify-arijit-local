@@ -1,5 +1,6 @@
 import {
   faArrowsRotate,
+  faCircle,
   faCircleCheck,
   faCirclePlus,
   faDownload,
@@ -78,32 +79,58 @@ interface ParsedOptionPrompt {
   allowMulti: boolean;
 }
 
+interface NifFieldValueRow {
+  field: string;
+  value: string;
+  isEmpty: boolean;
+}
+
 function parseAssistantOptionPrompt(content: string): ParsedOptionPrompt | null {
   const raw = String(content || "").replace(/\r/g, "").trim();
   if (!raw) {
     return null;
   }
 
+  const rawLines = raw.split("\n").map((line) => String(line || ""));
   const flattened = raw.replace(/\n+/g, " ").replace(/\s+/g, " ").trim();
   const optionRegex = /(?:^|\s)(\d{1,3})\.\s+(.+?)(?=(?:\s+\d{1,3}\.\s+)|$)/g;
 
-  const options: OptionChoice[] = [];
+  const optionsFromInlineText: OptionChoice[] = [];
   let match: RegExpExecArray | null = null;
   while ((match = optionRegex.exec(flattened)) !== null) {
     const id = String(match[1] || "").trim();
     const label = String(match[2] || "")
       .replace(/\s+/g, " ")
       .replace(/reply with the option number or option text\.?$/i, "")
+      .replace(/[|]+/g, " ")
+      .replace(/\s+/g, " ")
       .trim();
     if (id && label) {
-      options.push({ id, label });
+      optionsFromInlineText.push({ id, label });
+    }
+  }
+
+  const optionsFromMarkdownTable: OptionChoice[] = [];
+  const tableRowRegex = /^\s*\|\s*(\d{1,3})\.\s*\|\s*(.+?)\s*\|\s*$/;
+  for (const line of rawLines) {
+    const rowMatch = line.match(tableRowRegex);
+    if (!rowMatch) {
+      continue;
+    }
+    const id = String(rowMatch[1] || "").trim();
+    const label = String(rowMatch[2] || "").replace(/\s+/g, " ").trim();
+    if (id && label) {
+      optionsFromMarkdownTable.push({ id, label });
     }
   }
 
   // Remove duplicate labels while preserving first-seen order/id.
   const dedupedOptions: OptionChoice[] = [];
   const seenLabels = new Set<string>();
-  for (const option of options) {
+  const seedOptions = optionsFromMarkdownTable.length >= 2
+    ? optionsFromMarkdownTable
+    : optionsFromInlineText;
+  for (const option of seedOptions) {
     const norm = option.label.toLowerCase().replace(/\s+/g, " ").trim();
     if (!norm || seenLabels.has(norm)) {
       continue;
@@ -112,21 +139,28 @@ function parseAssistantOptionPrompt(content: string): ParsedOptionPrompt | null 
     dedupedOptions.push(option);
   }
 
-  const optionsToUse = dedupedOptions.length ? dedupedOptions : options;
+  const optionsToUse = dedupedOptions.length ? dedupedOptions : seedOptions;
 
   if (optionsToUse.length < 2) {
     return null;
   }
 
-  // Preserve full question/instruction text from original lines, removing only
-  // numbered option rows and the reply hint row.
-  const rawLines = raw.split("\n");
+  // Preserve question/instruction text while removing table scaffolding and option rows.
   const nonOptionLines = rawLines.filter((line) => {
     const lineText = String(line || "").trim();
     if (!lineText) {
       return false;
     }
     if (/^\d{1,3}\.\s+/.test(lineText)) {
+      return false;
+    }
+    if (/^\|\s*:?-+:?\s*\|\s*:?-+:?\s*\|/.test(lineText)) {
+      return false;
+    }
+    if (/^\|\s*number\s*\|\s*value\s*\|$/i.test(lineText)) {
+      return false;
+    }
+    if (/^\|\s*\d{1,3}\.\s*\|/.test(lineText)) {
       return false;
     }
     if (/^reply with the option number or option text\.?$/i.test(lineText)) {
@@ -145,6 +179,10 @@ function parseAssistantOptionPrompt(content: string): ParsedOptionPrompt | null 
   if (!promptText) {
     promptText = "Select from the options below:";
   }
+  promptText = promptText
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
 
   const lower = flattened.toLowerCase();
   const allowMulti = [
@@ -163,6 +201,95 @@ function parseAssistantOptionPrompt(content: string): ParsedOptionPrompt | null 
     options: optionsToUse,
     allowMulti,
   };
+}
+
+function formatOptionPromptForBusinessDisplay(
+  promptText: string,
+  allowMulti: boolean,
+): { heading: string; body: string } {
+  function stripMarkdownArtifacts(text: string): string {
+    return String(text || "")
+      .replace(/\*\*/g, "")
+      .replace(/__+/g, "")
+      .replace(/`+/g, "")
+      .replace(/^[\s>*-]+/gm, "")
+      .replace(/\s{2,}/g, " ")
+      .trim();
+  }
+
+  const raw = String(promptText || "").trim();
+  const normalized = raw
+    .replace(/\s+\?/g, "?")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+
+  const lines = normalized
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  const firstLine = stripMarkdownArtifacts(lines[0] || "");
+  const body = lines.length > 1
+    ? lines.slice(1).map((line) => stripMarkdownArtifacts(line)).filter(Boolean).join("\n")
+    : "";
+  const firstLineNoPrefix = firstLine
+    .replace(/^\*{0,2}\s*question\s*[a-z0-9_.:-]*\s*:\s*/i, "")
+    .trim();
+
+  const heading = firstLineNoPrefix
+    || (allowMulti ? "Please review and select one or more options" : "Please review and select one option");
+
+  return { heading, body };
+}
+
+function sanitizeNonOptionMessageForDisplay(content: string): string {
+  return String(content || "")
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, "$1 ($2)")
+    .replace(/\*\*(.*?)\*\*/g, "$1")
+    .replace(/__(.*?)__/g, "$1")
+    .replace(/`([^`]*)`/g, "$1")
+    .replace(/^#{1,6}\s*/gm, "")
+    .replace(/^\s*>\s*/gm, "")
+    .replace(/\r/g, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+function parseSelectedOptionIdsFromUserReply(
+  reply: string,
+  prompt: ParsedOptionPrompt,
+): Set<string> {
+  const selected = new Set<string>();
+  const text = String(reply || "").trim();
+  if (!text) {
+    return selected;
+  }
+
+  const idSet = new Set(prompt.options.map((option) => option.id));
+  const idMatches = text.match(/\b\d{1,3}\b/g) || [];
+  for (const raw of idMatches) {
+    const id = String(raw || "").trim();
+    if (idSet.has(id)) {
+      selected.add(id);
+    }
+  }
+
+  if (selected.size > 0) {
+    return selected;
+  }
+
+  const lowerReply = text.toLowerCase();
+  for (const option of prompt.options) {
+    const label = option.label.toLowerCase();
+    if (!label) {
+      continue;
+    }
+    if (lowerReply === label || lowerReply.includes(label)) {
+      selected.add(option.id);
+    }
+  }
+
+  return selected;
 }
 
 export default function NifStepSessionPage({
@@ -184,6 +311,7 @@ export default function NifStepSessionPage({
   const chatScrollRef = useRef<HTMLDivElement | null>(null);
 
   const [showStarter, setShowStarter] = useState(true);
+  const [starterLocked, setStarterLocked] = useState(false);
   const [showLoadPanel, setShowLoadPanel] = useState(false);
   const [actions, setActions] = useState<NifStepOption[]>(DEFAULT_ACTIONS);
   const [savedFiles, setSavedFiles] = useState<SavedNifFileOption[]>([]);
@@ -197,9 +325,12 @@ export default function NifStepSessionPage({
   const [inlineSelectedSingle, setInlineSelectedSingle] = useState<OptionChoice | null>(null);
   const [inlineSelectedMulti, setInlineSelectedMulti] = useState<OptionChoice[]>([]);
   const [inlineOptionFilter, setInlineOptionFilter] = useState("");
+  const [leftPaneWidthPct, setLeftPaneWidthPct] = useState(70);
+  const [isResizingSplit, setIsResizingSplit] = useState(false);
+  const splitContainerRef = useRef<HTMLDivElement | null>(null);
 
   const isAnyBusy = busy || actionBusy;
-  const canTypeInChat = !showStarter;
+  const canTypeInChat = starterLocked || !showStarter;
   const loadDisabled = useMemo(
     () => isAnyBusy || !selectedFile || savedFiles.length === 0,
     [isAnyBusy, selectedFile, savedFiles.length],
@@ -238,6 +369,49 @@ export default function NifStepSessionPage({
       `${option.id} ${option.label}`.toLowerCase().includes(query)
     ));
   }, [activeOptionPrompt, inlineOptionFilter]);
+  const nifFieldRows = useMemo<NifFieldValueRow[]>(() => {
+    const emptyValues = new Set([
+      "",
+      "<NOT YET DETERMINED>",
+      "<NOT REQUIRED>",
+      "nan",
+      "none",
+      "null",
+    ]);
+
+    try {
+      const parsed = JSON.parse(String(nifProgressJson || "{}")) as {
+        columns?: unknown[];
+        data?: unknown[][];
+      };
+      const columns = Array.isArray(parsed.columns) ? parsed.columns : [];
+      const rows = Array.isArray(parsed.data) ? parsed.data : [];
+      const firstRow = Array.isArray(rows[0]) ? rows[0] : [];
+
+      return columns
+        .map((column, index) => {
+          const field = String(column || "").trim();
+          if (!field || field.startsWith("_agentref_")) {
+            return null;
+          }
+          const rawValue = firstRow[index];
+          const value = String(rawValue ?? "").trim();
+          const isEmpty = emptyValues.has(value.toLowerCase()) || emptyValues.has(value);
+          return {
+            field,
+            value: isEmpty ? "Not selected yet" : value,
+            isEmpty,
+          };
+        })
+        .filter((row): row is NifFieldValueRow => Boolean(row));
+    } catch {
+      return [];
+    }
+  }, [nifProgressJson]);
+  const selectedFieldCount = useMemo(
+    () => nifFieldRows.filter((row) => !row.isEmpty).length,
+    [nifFieldRows],
+  );
 
   function appendStatus(message: string) {
     const text = String(message || "").trim();
@@ -340,6 +514,45 @@ export default function NifStepSessionPage({
     setInlineOptionFilter("");
   }, [activeOptionPrompt?.index]);
 
+  useEffect(() => {
+    if (!isResizingSplit) {
+      return undefined;
+    }
+
+    const minLeftPct = 45;
+    const maxLeftPct = 85;
+
+    function onPointerMove(event: PointerEvent) {
+      const container = splitContainerRef.current;
+      if (!container) {
+        return;
+      }
+      const rect = container.getBoundingClientRect();
+      if (!rect.width) {
+        return;
+      }
+      const nextPct = ((event.clientX - rect.left) / rect.width) * 100;
+      const clamped = Math.min(maxLeftPct, Math.max(minLeftPct, nextPct));
+      setLeftPaneWidthPct(clamped);
+    }
+
+    function onPointerUp() {
+      setIsResizingSplit(false);
+    }
+
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+    window.addEventListener("pointermove", onPointerMove);
+    window.addEventListener("pointerup", onPointerUp);
+
+    return () => {
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+      window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("pointerup", onPointerUp);
+    };
+  }, [isResizingSplit]);
+
   function isInlineOptionSelected(optionId: string): boolean {
     if (activeOptionPrompt?.allowMulti) {
       return inlineSelectedMulti.some((option) => option.id === optionId);
@@ -360,6 +573,22 @@ export default function NifStepSessionPage({
       return;
     }
     setInlineSelectedSingle((prev) => (prev?.id === option.id ? null : option));
+  }
+
+  function findSelectedOptionIdsForPrompt(
+    promptIndex: number,
+    prompt: ParsedOptionPrompt,
+  ): Set<string> {
+    for (let i = promptIndex + 1; i < messages.length; i += 1) {
+      const msg = messages[i];
+      if (msg.role === "assistant") {
+        break;
+      }
+      if (msg.role === "user") {
+        return parseSelectedOptionIdsFromUserReply(msg.content, prompt);
+      }
+    }
+    return new Set<string>();
   }
 
   async function runAutoChatFromAction(actionResult: NifSessionActionResponse) {
@@ -399,6 +628,7 @@ export default function NifStepSessionPage({
         session_id: sessionId,
         submit_clicks: submitClicks,
       });
+      setStarterLocked(true);
       setShowStarter(false);
       setShowLoadPanel(false);
       await runAutoChatFromAction(result);
@@ -429,12 +659,13 @@ export default function NifStepSessionPage({
         submit_clicks: submitClicks,
         filename: selectedFile.value,
       });
+      setStarterLocked(true);
       setShowStarter(false);
       setShowLoadPanel(false);
       await runAutoChatFromAction(result);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load selected NIF.");
-      setShowStarter(true);
+      setShowStarter(!starterLocked);
       setShowLoadPanel(true);
     } finally {
       setBusy(false);
@@ -473,7 +704,7 @@ export default function NifStepSessionPage({
     setError(null);
     try {
       setMessages([]);
-      setShowStarter(true);
+      setShowStarter(!starterLocked);
       setShowLoadPanel(false);
       setSelectedFile(null);
       await bootstrapStepPage();
@@ -667,126 +898,252 @@ export default function NifStepSessionPage({
         </Paper>
       ) : null}
 
-      <Paper className="chat-shell" elevation={0}>
-        <Box className="chat-scroll" ref={chatScrollRef}>
-          {messages.length === 0 ? (
-            <Typography variant="body2" color="text.secondary">
-              NIF Form creation module is ready! Choose between New Form (NIF) Chat session OR Load Saved Forms from previous chat
-            </Typography>
-          ) : null}
+      <Box
+        className="step-chat-split"
+        ref={splitContainerRef}
+        style={{ ["--step-left-pane" as string]: `${leftPaneWidthPct}%` }}
+      >
+        <Paper className="chat-shell step-chat-column" elevation={0}>
+          <Box className="chat-scroll" ref={chatScrollRef}>
+            {messages.length === 0 ? (
+              <Typography variant="body2" color="text.secondary">
+                NIF Form creation module is ready! Choose between New Form (NIF) Chat session OR Load Saved Forms from previous chat
+              </Typography>
+            ) : null}
 
-          {messages.map((message, index) => (
-            <Box
-              key={`${message.role}-${index}`}
-              className={`chat-message-row ${message.role === "user" ? "chat-message-row-user" : "chat-message-row-assistant"}`}
-            >
-              {message.role === "user" ? null : (
-                <Avatar className="chat-avatar chat-avatar-bot">
-                  <FaIcon icon={faRobot} />
-                </Avatar>
-              )}
-              <Paper
-                className={`chat-bubble ${message.role === "user" ? "chat-bubble-user" : "chat-bubble-assistant"}`}
-                elevation={0}
+            {messages.map((message, index) => (
+              <Box
+                key={`${message.role}-${index}`}
+                className={`chat-message-row ${message.role === "user" ? "chat-message-row-user" : "chat-message-row-assistant"}`}
               >
+                {message.role === "user" ? null : (
+                  <Avatar className="chat-avatar chat-avatar-bot">
+                    <FaIcon icon={faRobot} />
+                  </Avatar>
+                )}
+                <Paper
+                  className={`chat-bubble ${message.role === "user" ? "chat-bubble-user" : "chat-bubble-assistant"}`}
+                  elevation={0}
+                >
                 {message.role === "assistant" && activeOptionPrompt?.index === index ? (
                   <Stack spacing={0.8}>
-                    <Typography variant="body2" sx={{ whiteSpace: "pre-wrap" }}>
-                      {activeOptionPrompt.promptText}
-                    </Typography>
-
-                    <TextField
-                      size="small"
-                      placeholder="Search options"
-                      value={inlineOptionFilter}
-                      onChange={(event) => setInlineOptionFilter(event.target.value)}
-                      InputProps={{
-                        startAdornment: (
-                          <InputAdornment position="start">
-                            <FaIcon icon={faMagnifyingGlass} />
-                          </InputAdornment>
-                        ),
-                      }}
-                    />
-
-                    <Box className="inline-option-list">
-                      {filteredInlineOptions.map((option) => {
-                        const selected = isInlineOptionSelected(option.id);
-                        return (
-                          <ButtonBase
-                            key={option.id}
-                            className={`inline-option-item ${selected ? "inline-option-item-selected" : ""}`}
-                            onClick={() => toggleInlineOption(option)}
-                          >
-                            {selected ? (
-                              <FaIcon icon={faCircleCheck} className="inline-option-icon" />
-                            ) : (
-                              <FaIcon icon={faCircleCheck} className="inline-option-icon" />
-                            )}
-                            <Typography variant="caption" className="inline-option-id">
-                              {option.id}.
+                    {(() => {
+                      const formattedPrompt = formatOptionPromptForBusinessDisplay(
+                        activeOptionPrompt.promptText,
+                        activeOptionPrompt.allowMulti,
+                      );
+                      return (
+                        <Box className="inline-option-prompt">
+                          <Typography variant="subtitle2" className="inline-option-prompt-title">
+                            {formattedPrompt.heading}
+                          </Typography>
+                          {formattedPrompt.body ? (
+                            <Typography variant="body2" className="inline-option-prompt-body">
+                              {formattedPrompt.body}
                             </Typography>
-                            <Typography variant="body2" className="inline-option-label">
-                              {option.label}
-                            </Typography>
-                          </ButtonBase>
-                        );
-                      })}
-                      {!filteredInlineOptions.length ? (
-                        <Typography variant="caption" color="text.secondary" sx={{ px: 1, py: 0.6 }}>
-                          No options matched your search.
-                        </Typography>
-                      ) : null}
-                    </Box>
+                          ) : null}
+                          <Typography variant="caption" className="inline-option-prompt-hint">
+                            {activeOptionPrompt.allowMulti
+                              ? "Choose one or more items from the list below."
+                              : "Choose one item from the list below."}
+                          </Typography>
+                        </Box>
+                      );
+                    })()}
 
-                    <Typography variant="caption" color="text.secondary">
-                      {activeOptionPrompt.allowMulti
-                        ? `${inlineSelectedMulti.length} option(s) selected`
-                        : inlineSelectedSingle
-                          ? `Selected option ${inlineSelectedSingle.id}`
-                          : "No option selected"}
-                    </Typography>
-
-                    <Stack direction="row" justifyContent="flex-end">
-                      <Button
+                      <TextField
                         size="small"
-                        variant="contained"
-                        onClick={() => void handleSubmitInlineSelection()}
-                        disabled={
-                          isAnyBusy
-                          || (
-                            activeOptionPrompt.allowMulti
-                              ? inlineSelectedMulti.length === 0
-                              : !inlineSelectedSingle
-                          )
-                        }
-                      >
-                        {activeOptionPrompt.allowMulti ? "Submit options" : "Submit option"}
-                      </Button>
-                    </Stack>
-                  </Stack>
-                ) : (
-                  <Typography variant="body2" sx={{ whiteSpace: "pre-wrap" }}>
-                    {message.content}
-                  </Typography>
-                )}
-              </Paper>
-              {message.role === "user" ? (
-                <Avatar className="chat-avatar chat-avatar-user">
-                  <FaIcon icon={faUser} />
-                </Avatar>
-              ) : null}
-            </Box>
-          ))}
+                        placeholder="Search options"
+                        value={inlineOptionFilter}
+                        onChange={(event) => setInlineOptionFilter(event.target.value)}
+                        InputProps={{
+                          startAdornment: (
+                            <InputAdornment position="start">
+                              <FaIcon icon={faMagnifyingGlass} />
+                            </InputAdornment>
+                          ),
+                        }}
+                      />
 
-          {busy ? (
-            <Box className="typing-row">
-              <CircularProgress size={14} />
-              <Typography variant="caption" color="text.secondary">NIFTY is thinking...</Typography>
+                      <Box className="inline-option-list">
+                        {filteredInlineOptions.map((option) => {
+                          const selected = isInlineOptionSelected(option.id);
+                          return (
+                            <ButtonBase
+                              key={option.id}
+                              className={`inline-option-item ${selected ? "inline-option-item-selected" : ""}`}
+                              onClick={() => toggleInlineOption(option)}
+                            >
+                              {selected ? (
+                                <FaIcon icon={faCircleCheck} className="inline-option-icon" />
+                              ) : (
+                                <FaIcon icon={faCircle} className="inline-option-icon" />
+                              )}
+                              <Typography variant="caption" className="inline-option-id">
+                                {option.id}.
+                              </Typography>
+                              <Typography variant="body2" className="inline-option-label">
+                                {option.label}
+                              </Typography>
+                            </ButtonBase>
+                          );
+                        })}
+                        {!filteredInlineOptions.length ? (
+                          <Typography variant="caption" color="text.secondary" sx={{ px: 1, py: 0.6 }}>
+                            No options matched your search.
+                          </Typography>
+                        ) : null}
+                      </Box>
+
+                      <Typography variant="caption" color="text.secondary">
+                        {activeOptionPrompt.allowMulti
+                          ? `${inlineSelectedMulti.length} option(s) selected`
+                          : inlineSelectedSingle
+                            ? `Selected option ${inlineSelectedSingle.id}`
+                            : "No option selected"}
+                      </Typography>
+
+                      <Stack direction="row" justifyContent="flex-end">
+                        <Button
+                          size="small"
+                          variant="contained"
+                          onClick={() => void handleSubmitInlineSelection()}
+                          disabled={
+                            isAnyBusy
+                            || (
+                              activeOptionPrompt.allowMulti
+                                ? inlineSelectedMulti.length === 0
+                                : !inlineSelectedSingle
+                            )
+                          }
+                        >
+                          {activeOptionPrompt.allowMulti ? "Submit options" : "Submit option"}
+                        </Button>
+                      </Stack>
+                    </Stack>
+                ) : message.role === "assistant" && parseAssistantOptionPrompt(message.content) ? (
+                  (() => {
+                    const parsed = parseAssistantOptionPrompt(message.content);
+                    if (!parsed) {
+                      return null;
+                    }
+                    const selectedIds = findSelectedOptionIdsForPrompt(index, parsed);
+                    const formattedPrompt = formatOptionPromptForBusinessDisplay(
+                      parsed.promptText,
+                      parsed.allowMulti,
+                    );
+                    return (
+                      <Stack spacing={0.8}>
+                        <Box className="inline-option-prompt">
+                          <Typography variant="subtitle2" className="inline-option-prompt-title">
+                            {formattedPrompt.heading}
+                          </Typography>
+                          {formattedPrompt.body ? (
+                            <Typography variant="body2" className="inline-option-prompt-body">
+                              {formattedPrompt.body}
+                            </Typography>
+                          ) : null}
+                          <Typography variant="caption" className="inline-option-prompt-hint">
+                            {parsed.allowMulti
+                              ? "One or more items were expected for this response."
+                              : "One item was expected for this response."}
+                          </Typography>
+                        </Box>
+                        <Box className="inline-option-list inline-option-list-readonly">
+                            {parsed.options.map((option) => {
+                              const selected = selectedIds.has(option.id);
+                              return (
+                                <Box
+                                  key={option.id}
+                                  className={`inline-option-item inline-option-item-readonly ${selected ? "inline-option-item-selected" : ""}`}
+                                >
+                                  {selected ? (
+                                    <FaIcon icon={faCircleCheck} className="inline-option-icon" />
+                                  ) : (
+                                    <FaIcon icon={faCircle} className="inline-option-icon" />
+                                  )}
+                                  <Typography variant="caption" className="inline-option-id">
+                                    {option.id}.
+                                  </Typography>
+                                  <Typography variant="body2" className="inline-option-label">
+                                    {option.label}
+                                  </Typography>
+                                </Box>
+                              );
+                            })}
+                          </Box>
+                        </Stack>
+                      );
+                    })()
+                  ) : (
+                    <Typography variant="body2" sx={{ whiteSpace: "pre-wrap" }}>
+                      {message.role === "assistant" || message.role === "system"
+                        ? sanitizeNonOptionMessageForDisplay(message.content)
+                        : message.content}
+                    </Typography>
+                  )}
+                </Paper>
+                {message.role === "user" ? (
+                  <Avatar className="chat-avatar chat-avatar-user">
+                    <FaIcon icon={faUser} />
+                  </Avatar>
+                ) : null}
+              </Box>
+            ))}
+
+            {busy ? (
+              <Box className="typing-row">
+                <CircularProgress size={14} />
+                <Typography variant="caption" color="text.secondary">NIFTY is thinking...</Typography>
+              </Box>
+            ) : null}
+          </Box>
+        </Paper>
+
+        <Box
+          className={`step-splitter ${isResizingSplit ? "step-splitter-active" : ""}`}
+          role="separator"
+          aria-orientation="vertical"
+          onPointerDown={(event) => {
+            event.preventDefault();
+            setIsResizingSplit(true);
+          }}
+        />
+
+        <Paper className="step-progress-panel" elevation={0}>
+          <Stack spacing={0.8} sx={{ minHeight: 0, height: "100%" }}>
+            <Box className="step-progress-header">
+              <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+                NIF Field Tracker
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                {selectedFieldCount} selected / {nifFieldRows.length} total
+              </Typography>
             </Box>
-          ) : null}
-        </Box>
-      </Paper>
+            <Box className="step-progress-scroll">
+              {nifFieldRows.length === 0 ? (
+                <Typography variant="caption" color="text.secondary">
+                  No NIF field data loaded yet.
+                </Typography>
+              ) : (
+                nifFieldRows.map((row) => (
+                  <Box
+                    key={row.field}
+                    className={`step-progress-row ${row.isEmpty ? "step-progress-row-empty" : "step-progress-row-filled"}`}
+                  >
+                    <Typography variant="caption" className="step-progress-field">
+                      {row.field}
+                    </Typography>
+                    <Typography variant="body2" className="step-progress-value">
+                      {row.value}
+                    </Typography>
+                  </Box>
+                ))
+              )}
+            </Box>
+          </Stack>
+        </Paper>
+      </Box>
 
       <Stack spacing={0.7} className="step-action-bar">
         <Stack direction="row" spacing={1} alignItems="center" className="step-send-row">
