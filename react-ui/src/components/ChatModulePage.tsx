@@ -174,12 +174,18 @@ export default function ChatModulePage({
           return;
         }
 
-        if (selected.simple_message?.trim()) {
+        const shouldShowInitialSystemMessage = !(module.key === "field"
+          && String(selected.simple_message || "").trim() === "Continuing conversation with NIF Field agent");
+        if (selected.simple_message?.trim() && shouldShowInitialSystemMessage) {
           nextMessages.push({ role: "system", content: normalizeModuleMessage(selected.simple_message) });
         }
 
         if (selected.auto_submit && selected.human_chat_value?.trim()) {
-          nextMessages.push({ role: "user", content: selected.human_chat_value });
+          const shouldShowInitialUserMessage = !(module.key === "field"
+            && String(selected.human_chat_value || "").trim() === "Get started understanding NIF fields");
+          if (shouldShowInitialUserMessage) {
+            nextMessages.push({ role: "user", content: selected.human_chat_value });
+          }
           const turn = await submitChatTurn({
             session_id: selected.session_id,
             submit_clicks: selected.submit_clicks,
