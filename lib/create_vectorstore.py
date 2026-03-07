@@ -10,557 +10,77 @@ app starts.  This SHOULD be run whenever the databases or documents are updated.
 import knova_utils as utils
 import os
 import inspect
+from datetime import datetime as dt
 import pandas as pd
-import pdf2image
 import urllib.parse
-import botocore
-import time
-import json
-import boto3
-import chromadb.utils.embedding_functions as chembed
-import mimetypes
-import base64
-
-def timerstart(label: str) -> float:
-    start = time.time()
-    print(f"<timerstart> {label} started.")
-    return start
-
-def timerstop(start: float, label: str) -> None:
-    elapsed_seconds = time.time() - start
-    print(f"<timerstop> {label} completed in {elapsed_seconds / 60:.2f} minutes.")
-
-def _get_openai_client():
-    from openai import OpenAI
-
-    api_key = os.getenv("OPENAI_API_KEY", "").strip()
-    if not api_key:
-        raise RuntimeError(
-            "OPENAI_API_KEY is not set. "
-            "Set OPENAI_API_KEY in .env when using APP_LLM_PROVIDER=openai."
-        )
-    base_url = os.getenv("OPENAI_BASE_URL", "").strip()
-    if base_url:
-        return OpenAI(api_key=api_key, base_url=base_url)
-    return OpenAI(api_key=api_key)
-
-def make_openai_embedding_function():
-    embed_model = os.getenv("OPENAI_EMBED_MODEL", "text-embedding-3-large")
-    embed_dims_raw = os.getenv("OPENAI_EMBED_DIMENSIONS", "").strip()
-    embed_dims = int(embed_dims_raw) if embed_dims_raw else None
-    base_url = os.getenv("OPENAI_BASE_URL", "").strip()
-
-    return chembed.OpenAIEmbeddingFunction(
-        api_key=os.getenv("OPENAI_API_KEY"),
-        model_name=embed_model,
-        api_base=base_url or None,
-        dimensions=embed_dims,
-    )
-
-def query_multiple_images_openai(
-        IMAGE_LIST: list[str]
-        ,SYSTEM_PROMPT: str
-        ,USER_QUESTION: str
-        ,MODEL_ID: str | None = None
-    ):
-    vision_model = MODEL_ID or os.getenv("OPENAI_VISION_MODEL", "gpt-4o-mini")
-    client = _get_openai_client()
-
-    image_content = []
-    for image in IMAGE_LIST:
-        if utils.looks_like_base64(image):
-            image_b64 = image
-        else:
-            image_b64 = utils.encode_image(image)
-        image_content.append(
-            {
-                "type": "image_url",
-                "image_url": {"url": f"data:image/jpeg;base64,{image_b64}"},
-            }
-        )
-
-    messages = [
-        {"role": "system", "content": [{"type": "text", "text": SYSTEM_PROMPT}]},
-        {"role": "user", "content": [{"type": "text", "text": USER_QUESTION}] + image_content},
-    ]
-    response = client.chat.completions.create(
-        model=vision_model,
-        messages=messages,
-        max_tokens=1024,
-    )
-    return (response.choices[0].message.content or "").strip()
-
-def assert_bedrock_connectivity(
-        REGION_NAME:str=None
-    ):
-    funcname = inspect.currentframe().f_code.co_name
-
-    region_name = REGION_NAME or utils.get_bedrock_region()
-    auth_mode = utils.get_bedrock_auth_mode()
-    print(
-        f"<{funcname}> Starting Bedrock preflight checks for region '{region_name}' "
-        f"with auth_mode='{auth_mode}'..."
-    )
-
-    def _to_litellm_model(model_id: str) -> str:
-        model = str(model_id or "").strip()
-        if model.startswith("litellm/"):
-            model = model.split("litellm/", 1)[1]
-        if model.startswith("bedrock/"):
-            return model
-        return f"bedrock/{model}"
-
-    if auth_mode == "api_key":
-        token = os.getenv("AWS_BEARER_TOKEN_BEDROCK", "").strip()
-        if not token:
-            raise RuntimeError(
-                f"<{funcname}> AWS_BEARER_TOKEN_BEDROCK is not set for BEDROCK_AUTH_MODE=api_key."
-            )
-
-        os.environ.setdefault("AWS_REGION", region_name)
-        os.environ.setdefault("AWS_DEFAULT_REGION", region_name)
-
-        from litellm import completion, embedding
-
-        embed_model = os.getenv("BEDROCK_EMBED_MODEL", "amazon.titan-embed-text-v2:0").strip()
-        chat_model = utils.get_bedrock_chat_model(task_kind="docsearch")
-
-        # 1) Embedding check (Titan).
-        try:
-            emb = embedding(
-                model=_to_litellm_model(embed_model),
-                input=["bedrock preflight check"],
-                dimensions=256,
-                api_base=f"https://bedrock-runtime.{region_name}.amazonaws.com",
-            )
-            emb_data = emb.get("data", []) if isinstance(emb, dict) else getattr(emb, "data", [])
-            first_embedding = None
-            if emb_data:
-                first = emb_data[0]
-                first_embedding = first.get("embedding") if isinstance(first, dict) else getattr(first, "embedding", None)
-            if not first_embedding:
-                raise RuntimeError("Embedding response did not include vectors.")
-            print(f"<{funcname}> Bedrock API-key embeddings OK. Returned {len(first_embedding)} dimensions.")
-        except Exception as err:
-            raise RuntimeError(
-                f"<{funcname}> Bedrock API-key embedding preflight failed.\n"
-                "Check AWS_BEARER_TOKEN_BEDROCK, BEDROCK_EMBED_MODEL, model access, and outbound network.\n"
-                f"Original error: {err}"
-            ) from err
-
-        # 2) Chat/vision model check.
-        try:
-            completion(
-                model=_to_litellm_model(chat_model),
-                messages=[{"role": "user", "content": "Reply with OK"}],
-                max_tokens=8,
-                api_base=f"https://bedrock-runtime.{region_name}.amazonaws.com",
-            )
-            print(f"<{funcname}> Bedrock API-key chat model OK.")
-        except Exception as err:
-            raise RuntimeError(
-                f"<{funcname}> Bedrock API-key chat preflight failed.\n"
-                "Check APP_LLM_MODEL/BEDROCK_CHAT_MODEL access for Bedrock API-key auth.\n"
-                f"Original error: {err}"
-            ) from err
-
-        print(f"<{funcname}> All API-key preflight checks passed.")
-        return
-
-    # -------------------------------------------------------------------------
-    # IAM auth path (instance role or AWS credentials)
-    # -------------------------------------------------------------------------
-    try:
-        sts_client = boto3.client("sts", region_name=region_name)
-        caller = sts_client.get_caller_identity()
-        print(
-            f"<{funcname}> STS OK. Account={caller.get('Account')}, "
-            f"Arn={caller.get('Arn')}."
-        )
-    except botocore.exceptions.EndpointConnectionError as err:
-        raise RuntimeError(
-            f"<{funcname}> Could not reach AWS STS endpoint in region '{region_name}'.\n"
-            "This is a network/DNS/VPN/proxy issue.\n"
-            "Verify outbound access to sts.amazonaws.com and bedrock-runtime endpoints.\n"
-            f"Original error: {err}"
-        ) from err
-    except Exception as err:
-        raise RuntimeError(
-            f"<{funcname}> AWS IAM credential check failed.\n"
-            f"Set valid AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY "
-            f"(and AWS_SESSION_TOKEN if temporary creds), or use an EC2 IAM role.\n"
-            f"Original error: {err}"
-        ) from err
-
-    bedrock_client = boto3.client("bedrock-runtime", region_name=region_name)
-
-    try:
-        titan_request = {
-            "inputText": "bedrock preflight check",
-            "dimensions": 256,
-            "normalize": True,
-        }
-        titan_response = bedrock_client.invoke_model(
-            modelId="amazon.titan-embed-text-v2:0",
-            body=json.dumps(titan_request),
-            accept="application/json",
-            contentType="application/json",
-        )
-        titan_body = json.loads(titan_response["body"].read())
-        embedding = titan_body.get("embedding")
-        if not embedding:
-            raise RuntimeError("Titan response did not include an embedding.")
-        print(f"<{funcname}> Titan embedding OK. Returned {len(embedding)} dimensions.")
-    except botocore.exceptions.EndpointConnectionError as err:
-        raise RuntimeError(
-            f"<{funcname}> Could not reach Bedrock endpoint in region '{region_name}'.\n"
-            "Check DNS/network/VPN/proxy and verify Bedrock endpoint access.\n"
-            f"Original error: {err}"
-        ) from err
-    except Exception as err:
-        raise RuntimeError(
-            f"<{funcname}> Bedrock Titan embedding preflight failed.\n"
-            "Confirm IAM includes bedrock:InvokeModel for 'amazon.titan-embed-text-v2:0'.\n"
-            f"Original error: {err}"
-        ) from err
-
-    try:
-        chat_model_id = utils.get_bedrock_chat_model(task_kind="docsearch")
-        from litellm import completion
-
-        model_for_litellm = str(chat_model_id).strip()
-        if model_for_litellm.startswith("litellm/"):
-            model_for_litellm = model_for_litellm.split("litellm/", 1)[1]
-        if not model_for_litellm.startswith("bedrock/"):
-            model_for_litellm = f"bedrock/{model_for_litellm}"
-
-        completion(
-            model=model_for_litellm,
-            messages=[{"role": "user", "content": "Reply with OK"}],
-            max_tokens=8,
-        )
-        print(f"<{funcname}> Bedrock chat model OK.")
-    except botocore.exceptions.EndpointConnectionError as err:
-        raise RuntimeError(
-            f"<{funcname}> Could not reach Bedrock endpoint in region '{region_name}'.\n"
-            "Check DNS/network/VPN/proxy and verify Bedrock endpoint access.\n"
-            f"Original error: {err}"
-        ) from err
-    except Exception as err:
-        raise RuntimeError(
-            f"<{funcname}> Bedrock chat preflight failed.\n"
-            f"Confirm IAM includes bedrock:InvokeModel for '{utils.get_bedrock_chat_model(task_kind='docsearch')}'.\n"
-            f"Original error: {err}"
-        ) from err
-
-    print(f"<{funcname}> All IAM preflight checks passed.")
-
-def assert_openai_connectivity():
-    funcname = inspect.currentframe().f_code.co_name
-
-    embed_model = os.getenv("OPENAI_EMBED_MODEL", utils.DEFAULT_OPENAI_EMBED_MODEL)
-    vision_model = utils.get_openai_vision_model()
-
-    print(
-        f"<{funcname}> Starting OpenAI preflight checks "
-        f"(embed='{embed_model}', vision='{vision_model}')..."
-    )
-    try:
-        client = _get_openai_client()
-    except Exception as err:
-        raise RuntimeError(f"<{funcname}> OpenAI client initialization failed: {err}") from err
-
-    # -------------------------------------------------------------------------
-    # 1) Verify embeddings endpoint (used for vector embeddings).
-    # -------------------------------------------------------------------------
-    try:
-        emb = client.embeddings.create(model=embed_model, input=["openai preflight check"])
-        first_embedding = emb.data[0].embedding if emb.data else None
-        if not first_embedding:
-            raise RuntimeError("Embedding response did not include vectors.")
-        print(f"<{funcname}> OpenAI embeddings OK. Returned {len(first_embedding)} dimensions.")
-    except Exception as err:
-        if err.__class__.__name__ == "APIConnectionError":
-            raise RuntimeError(
-                f"<{funcname}> Could not reach OpenAI endpoint.\n"
-                "This is usually a network/DNS/proxy issue.\n"
-                "Check outbound access to api.openai.com (or OPENAI_BASE_URL if set).\n"
-                f"Original error: {err}"
-            ) from err
-        raise RuntimeError(
-            f"<{funcname}> OpenAI embedding preflight failed.\n"
-            "Check OPENAI_API_KEY, OPENAI_EMBED_MODEL, account permissions, and outbound access to api.openai.com.\n"
-            f"Original error: {err}"
-        ) from err
-
-    # -------------------------------------------------------------------------
-    # 2) Verify vision-capable chat endpoint (used for page summarization).
-    # -------------------------------------------------------------------------
-    try:
-        vision_test_image = os.getenv(
-            "OPENAI_VISION_TEST_IMAGE",
-            os.path.join(utils.IMAGE_FOLDER, "NIF Training Deck v40001-001.jpg"),
-        ).strip()
-
-        # Prefer a real local image (mirrors actual runtime behavior).
-        if os.path.isfile(vision_test_image):
-            mime, _ = mimetypes.guess_type(vision_test_image)
-            mime = mime or "image/jpeg"
-            with open(vision_test_image, "rb") as f:
-                image_b64 = base64.b64encode(f.read()).decode("utf-8")
-            image_url = f"data:{mime};base64,{image_b64}"
-        else:
-            # Fallback if the configured image is missing.
-            tiny_png = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8Xw8AAgMBgJPfH2YAAAAASUVORK5CYII="
-            image_url = f"data:image/png;base64,{tiny_png}"
-
-        resp = client.chat.completions.create(
-            model=vision_model,
-            messages=[
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": "Reply with OK"},
-                        {"type": "image_url", "image_url": {"url": image_url}},
-                    ],
-                }
-            ],
-            max_tokens=8,
-        )
-        content = (resp.choices[0].message.content or "").strip()
-        if not content:
-            raise RuntimeError("Vision chat response was empty.")
-        print(f"<{funcname}> OpenAI vision chat OK.")
-    except Exception as err:
-        if "unsupported image" in str(err).lower():
-            raise RuntimeError(
-                f"<{funcname}> OpenAI vision preflight failed with unsupported image.\n"
-                "Set OPENAI_VISION_TEST_IMAGE to a valid local JPG/PNG path that your endpoint accepts,\n"
-                "or check if your OPENAI_BASE_URL gateway supports image_url data URLs.\n"
-                f"Current OPENAI_VISION_TEST_IMAGE={vision_test_image!r}\n"
-                f"Original error: {err}"
-            ) from err
-        if err.__class__.__name__ == "APIConnectionError":
-            raise RuntimeError(
-                f"<{funcname}> Could not reach OpenAI endpoint.\n"
-                "This is usually a network/DNS/proxy issue.\n"
-                "Check outbound access to api.openai.com (or OPENAI_BASE_URL if set).\n"
-                f"Original error: {err}"
-            ) from err
-        raise RuntimeError(
-            f"<{funcname}> OpenAI vision preflight failed.\n"
-            "Check OPENAI_VISION_MODEL and ensure your account can use a vision-capable model.\n"
-            f"Original error: {err}"
-        ) from err
-
-    print(f"<{funcname}> All preflight checks passed.")
-
-def embed_pdf_multimodal(
-        DOC:str                     # Full path to file
-        ,COLLECTION:object          # ChromaDB collection to write to
-        ,IMAGE_FOLDER:str           # Folder to store page images
-        ,SUMMARY_FN:object=utils.query_multiple_images_bedrock
-        ,EMBEDDING_MODEL:object=utils.BedrockTitanEmbeddingFunction()     # Embedding model to use.
-        ,SLEEP_IF_NEEDED:int=10     # Seconds to sleep between LLM calls, if there is a throttling exception
-    ):
-    funcname = inspect.currentframe().f_code.co_name
-
-    print(f"<{funcname}> Processing document {DOC}...")
-
-    # Create an image for each page
-    file_dir, file_name, file_ext = utils.dirnamext(DOC)
-    print(f"<{funcname}> Creating image for each page...")
-    page_images = pdf2image.convert_from_path(
-        DOC
-        ,output_folder=IMAGE_FOLDER     # Write images to this folder
-        ,output_file=file_name          # Base file name for images - use original file name
-        ,paths_only=True                # True: do not store image in memory, only path to image
-        ,fmt='jpeg'
-        ,size=1200                      # Set longest side to 1200 pixels
-    )
-
-    page_summary_prompt = '''
-    You are an AI assistant tasked with summarizing documents based on images of
-    their pages. The pages may contain text, charts, and images. These summaries
-    will be searched to find relevant documents to answer user questions. Give a
-    concise summary of the document which is well optimized for search, being sure
-    to mention all important elements including text, charts, and images. Include
-    the document name and page number if available.
-    '''
-    page_summary_question = 'Summarize this page.'
-
-    page_summaries = []     # Initialize
-    for i, path_to_page_image in enumerate(page_images):
-        page_summary = '<NO SUMMARY>'   # Default
-        retry = True
-        page_retries = 0
-        while retry:
-            page_retries += 1 
-            
-            # Call the LLM to summarize the page
-            print(f"<{funcname}> Creating summary for page {i+1} of {len(page_images)}...")
-            try:
-                page_summary = SUMMARY_FN([path_to_page_image], page_summary_prompt, page_summary_question)
-                print(f"<{funcname}> Success!")
-                retry = False   # Exit retry loop
-            except botocore.exceptions.ClientError as error:
-                if error.response['Error']['Code'] == 'ThrottlingException':
-                    print(f"<{funcname}> LLM throttling exception.")
-                    time.sleep(SLEEP_IF_NEEDED)
-                    # Will retry this page
-                    if page_retries > 2:
-                        print(f"<{funcname}> Max retries reached. Moving on.")
-                        retry = False
-                else:
-                    print(f"<{funcname}> boto3 error: {error}")
-                    print("Moving on.")
-                    retry = False   # Error besides throttling. Exit retry loop.
-            except Exception as e:
-                print(f"<{funcname}> Exception: {e}")
-                print("Moving on.")
-                retry = False    # Another error processing this page. Move on to next page.
-            
-        page_summaries.append(page_summary)
-
-        # Define document ID
-        # Must be unique for each page
-        pageimage_dir, pageimage_name, pageimage_ext = utils.dirnamext(path_to_page_image)
-        doc_id = pageimage_name
-
-        # Create embedding from page summary
-        print(f"<{funcname}> Creating embedding for page {i+1} summary...")
-        page_summary_embedded = EMBEDDING_MODEL([page_summary])
-
-        # Simple: return the summary
-        # relevant_document = page_summary
-
-        # More complex: return the image for the single page to go with the summary
-        relevant_document = path_to_page_image
-
-        # # Still more complex: define dictionary to return when retriever finds a relevant page summary
-        # # Return the image for that page and the pages on either side of it.
-        # # Can also add a URL for the page, if you have it.
-        # # This will be stored as a string in the vectorstore. You must tell the LLM to interpret it as a dictionary after retrieval.
-        # relevant_document = {
-        #     "Page summary":page_summary
-        #     ,"Page images":page_images[start:end]
-        #     ,"Page URL":link_to_page
-        # }
-
-        # Add to vectorstore
-        # Upsert: if document IDs already exist in the vectorstore, replace. Otherwise, add new.
-        COLLECTION.upsert(
-            ids=doc_id
-            ,embeddings=page_summary_embedded               # The thing to search with a user query
-            ,documents=str(relevant_document)               # The thing to return when a query gets a hit. Note coercion to string.
-            ,metadatas=[{                                   # Metadata
-                "document_name":f"{file_name}.{file_ext}"   # File name
-                ,"page_number":f"{i+1}"                     # Page number
-            }]
-        )
-        print(f"<{funcname}> Page {i+1} from document {file_name}.{file_ext} added to vectorstore.")
-                
-    print(f"<{funcname}> Document {DOC} done.")
-
-    return page_images, page_summaries
-
-def save_page_summaries(
-        PAGE_IMAGES:list[str]
-        ,PAGE_SUMMARIES:list[str]
-        ,OUTPATH:str
-        ,LABEL:str
-    ):
-    funcname = inspect.currentframe().f_code.co_name
-
-    page_images_with_summaries = {}
-    for i, page_summary in enumerate(PAGE_SUMMARIES):
-        page_images_with_summaries[PAGE_IMAGES[i]] = page_summary
-    outfile = os.path.join(OUTPATH, f"{LABEL} PAGE SUMMARY LOOKUP.pkl.gz")
-    utils.save_to_pickle(page_images_with_summaries, outfile)
-    print(f"<{funcname}> {outfile} created.")
-
-    page_summaries_prettystring = '\n\n   <<<PAGE BREAK>>>\n\n'.join(PAGE_SUMMARIES)
-    outfile = os.path.join(OUTPATH, f"{LABEL} PAGE SUMMARY LOOKUP.pkl.gz")
-    utils.save_to_pickle(page_summaries_prettystring, os.path.join(OUTPATH, f"{LABEL} PAGE SUMMARIES PLAINTEXT.txt"))
-    print(f"<{funcname}> {outfile} created.")
-
-    return None
-
-# To turn a filename into a link to a local file
-# Note this assumes a specific folder and local host port
-local_host_with_port = '127.0.0.1:8052'
-def get_web_url(filename):
-    if str(filename) == 'nan':
-        file_link = ''
-    else:
-        encoded_filename = urllib.parse.quote(filename)
-        # encoded_filename = filename.replace(' ', '%20').replace('.', '%2E')
-        # file_link = f"{local_host_with_port}/assets/raw_docs/{encoded_filename}"
-        file_link = f"/assets/raw_docs/{encoded_filename}"
-    return file_link
 
 #%% PATHS & CONSTANTS
 # *****************************************************************************
 '''
 These are defined in knova_utils.py.
 '''
-VECTORSTORE_LLM_PROVIDER = utils.get_app_llm_provider()
-
-if VECTORSTORE_LLM_PROVIDER not in ("bedrock", "openai"):
-    raise RuntimeError(
-        "APP_LLM_PROVIDER/VECTORSTORE_LLM_PROVIDER must be one of: 'bedrock', 'openai'. "
-        f"Got: {VECTORSTORE_LLM_PROVIDER!r}"
-    )
-
-# Fail fast on auth/network/model access before starting long PDF processing.
-if VECTORSTORE_LLM_PROVIDER == "bedrock":
-    assert_bedrock_connectivity()
-    summary_fn = lambda images, system_prompt, user_question: utils.query_multiple_images_by_provider(
-        IMAGE_LIST=images,
-        SYSTEM_PROMPT=system_prompt,
-        USER_QUESTION=user_question,
-        provider="bedrock",
-    )
-    embedding_model = utils.get_cached_retrieval_embedding_function(provider="bedrock")
-else:
-    assert_openai_connectivity()
-    summary_fn = lambda images, system_prompt, user_question: utils.query_multiple_images_by_provider(
-        IMAGE_LIST=images,
-        SYSTEM_PROMPT=system_prompt,
-        USER_QUESTION=user_question,
-        provider="openai",
-    )
-    embedding_model = utils.get_cached_retrieval_embedding_function(provider="openai")
-
-#%% CREATE OR LOAD VECTORSTORE
+#%% NIF TRAINING DECK ONLY
 # *****************************************************************************
+# =============================================================================
+#### Define folder for this vectorstore
+# =============================================================================
+vectorstore_folder = os.path.join(utils.VECTORSTORE_FOLDER, 'nif_training_deck_only')
+
+chroma_database = utils.get_or_create_vectorstore(vectorstore_folder)
+collection_1 = chroma_database.get_or_create_collection(name='nif_training_deck')
+
+# =============================================================================
+#### Full training deck
+# =============================================================================
 '''
-Idea: create multiple collections. If you want to ensure you get results from
-a variety of documents, put those documents in separate collections and submit
-your query to all collections.
+Run time: 1h 34m
 '''
-chroma_database = utils.get_vectorstore(utils.VECTORSTORE_FOLDER)
+doc_name = 'NIF Training Deck v4.pdf'
+
+utils.timerstart('NIF Training Deck')
+page_images, page_summaries = utils.embed_pdf_multimodal(
+    DOC=os.path.join(utils.DOCUMENT_FOLDER, doc_name)
+    ,COLLECTION=collection_1              # ChromaDB collection to write to
+    ,IMAGE_FOLDER=utils.IMAGE_FOLDER      # Folder to store page images
+)
+utils.save_page_summaries(page_images, page_summaries, utils.IMAGE_FOLDER, 'NIF Training Deck v4')
+utils.timerstop()
 
 '''
-# Check vectorstore
-utils.get_vectorstore(utils.VECTORSTORE_FOLDER)
-
-# Delete collection
-chroma_database.delete_collection(name='collection_3')
-chroma_database.delete_collection(name='collection_4')
-chroma_database.delete_collection(name='collection_5')
+# Delete collections
+chroma_database.delete_collection(name='rx_wip_setup_process')
 
 # Clear the whole vectorstore
 utils.clear_vectorstore(utils.VECTORSTORE_FOLDER)
 '''
 
-#%% EMBED MULTIMODAL DOCS
+#%% QUICK REFERENCE DOCS
 # *****************************************************************************
 '''
-Want to handle PDFs and slides with full multimodal support.
+Expanding the NIF Training Deck vectorstore by adding the other documents from 
+the quick reference list.
 
-UPDATE: for demo, using only 2 collections (full training deck and setup type guide).
+NIF Training deck will remain in its own collection. The other documents will
+be together in a second collection.
+
+UPDATE: simplifying this to put all docs in a single collection.
+
+UPDATE 2: added file modification date to metadata in embed_pdf_multimodal().
+    Recreating vectorstore.
 '''
+# =============================================================================
+#### Define folder for this vectorstore
+# =============================================================================
+# vectorstore_folder = os.path.join(utils.VECTORSTORE_FOLDER, 'quick_reference_docs')
+# vectorstore_folder = os.path.join(utils.VECTORSTORE_FOLDER, 'quick_reference_docs_single_collection')
+vectorstore_folder = os.path.join(utils.VECTORSTORE_FOLDER, 'quick_reference_docs_single_collection_fmoddate')
+
+chroma_database = utils.get_or_create_vectorstore(vectorstore_folder)
+# collection_1 = chroma_database.get_or_create_collection(name='nif_training_deck')
+# collection_2 = chroma_database.get_or_create_collection(name='other_quick_ref')
+
+collection_1 = chroma_database.get_or_create_collection(name='all_docs')
+
 # =============================================================================
 #### Full training deck
 # =============================================================================
@@ -569,18 +89,123 @@ Going in collection 1.
 
 Run time: 1h 34m
 '''
-collection_1 = chroma_database.get_or_create_collection(name='nif_training_deck')
+doc_name = 'NIF Training Deck v4.pdf'
+doc_label, doc_ext = doc_name.split('.')
 
-training_deck_timer = timerstart('NIF Training Deck')
-page_images, page_summaries = embed_pdf_multimodal(
-    DOC=os.path.join(utils.DOCUMENT_FOLDER ,'NIF Training Deck v4.pdf')
+utils.timerstart(doc_name)
+page_images, page_summaries = utils.embed_pdf_multimodal(
+    DOC=os.path.join(utils.DOCUMENT_FOLDER, doc_name)
     ,COLLECTION=collection_1              # ChromaDB collection to write to
     ,IMAGE_FOLDER=utils.IMAGE_FOLDER      # Folder to store page images
-    ,SUMMARY_FN=summary_fn
-    ,EMBEDDING_MODEL=embedding_model
 )
-save_page_summaries(page_images, page_summaries, utils.IMAGE_FOLDER, 'NIF Training Deck v4')
-timerstop(training_deck_timer, 'NIF Training Deck')
+utils.save_page_summaries(page_images, page_summaries, utils.IMAGE_FOLDER, doc_label)
+utils.timerstop()
+
+# =============================================================================
+#### NIF Initiator Checklist
+# =============================================================================
+'''
+UPDATE: going in collection 1.
+'''
+doc_name = 'NIF Initiator Check List.pdf'
+doc_label, doc_ext = doc_name.split('.')
+
+utils.timerstart(doc_name)
+page_images, page_summaries = utils.embed_pdf_multimodal(
+    DOC=os.path.join(utils.DOCUMENT_FOLDER, doc_name)
+    ,COLLECTION=collection_1              # ChromaDB collection to write to
+    ,IMAGE_FOLDER=utils.IMAGE_FOLDER      # Folder to store page images
+)
+utils.save_page_summaries(page_images, page_summaries, utils.IMAGE_FOLDER, doc_label)
+utils.timerstop()
+
+# =============================================================================
+#### BOM Training Material
+# =============================================================================
+'''
+UPDATE: going in collection 1.
+'''
+doc_name = 'BOM Training Material.pdf'
+doc_label, doc_ext = doc_name.split('.')
+
+utils.timerstart(doc_name)
+page_images, page_summaries = utils.embed_pdf_multimodal(
+    DOC=os.path.join(utils.DOCUMENT_FOLDER, doc_name)
+    ,COLLECTION=collection_1              # ChromaDB collection to write to
+    ,IMAGE_FOLDER=utils.IMAGE_FOLDER      # Folder to store page images
+)
+utils.save_page_summaries(page_images, page_summaries, utils.IMAGE_FOLDER, doc_label)
+utils.timerstop()
+
+# =============================================================================
+#### RX Setup Types
+# =============================================================================
+'''
+UPDATE: going in collection 1.
+'''
+doc_name = 'RX Setup Types March 2023.pdf'
+doc_label, doc_ext = doc_name.split('.')
+
+utils.timerstart(doc_name)
+page_images, page_summaries = utils.embed_pdf_multimodal(
+    DOC=os.path.join(utils.DOCUMENT_FOLDER, doc_name)
+    ,COLLECTION=collection_1              # ChromaDB collection to write to
+    ,IMAGE_FOLDER=utils.IMAGE_FOLDER      # Folder to store page images
+)
+utils.save_page_summaries(page_images, page_summaries, utils.IMAGE_FOLDER, doc_label)
+utils.timerstop()
+
+# =============================================================================
+#### RX WIP Quick Reference
+# =============================================================================
+'''
+UPDATE: going in collection 1.
+'''
+# doc_name = 'RX WIP Set-up Process Quick Reference Guide.pdf'
+# doc_label, doc_ext = doc_name.split('.')
+
+# utils.timerstart(doc_name)
+# page_images, page_summaries = utils.embed_pdf_multimodal(
+#     DOC=os.path.join(utils.DOCUMENT_FOLDER, doc_name)
+#     ,COLLECTION=collection_1              # ChromaDB collection to write to
+#     ,IMAGE_FOLDER=utils.IMAGE_FOLDER      # Folder to store page images
+# )
+# utils.save_page_summaries(page_images, page_summaries, utils.IMAGE_FOLDER, doc_label)
+# utils.timerstop()
+
+#%% EACH DOCUMENT IS A COLLECTION
+# *****************************************************************************
+'''
+Idea: create multiple collections. If you want to ensure you get results from
+a variety of documents, put those documents in separate collections and submit
+your query to all collections.
+
+Want to handle PDFs and slides with full multimodal support.
+'''
+# =============================================================================
+#### Define folder for this vectorstore
+# =============================================================================
+# vectorstore_folder = os.path.join(utils.VECTORSTORE_FOLDER, 'one_collection_per_doc')
+# chroma_database = utils.get_or_create_vectorstore(vectorstore_folder)
+
+# =============================================================================
+#### Full training deck
+# =============================================================================
+'''
+Going in collection 1.
+
+Run time: 1h 34m
+'''
+# collection_1 = chroma_database.get_or_create_collection(name='nif_training_deck')
+
+# utils.timerstart('NIF Training Deck')
+# page_images, page_summaries = utils.embed_pdf_multimodal(
+#     DOC=os.path.join(utils.DOCUMENT_FOLDER ,'NIF Training Deck v4.pdf')
+#     ,COLLECTION=collection_1              # ChromaDB collection to write to
+#     ,IMAGE_FOLDER=utils.IMAGE_FOLDER      # Folder to store page images
+# )
+# utils.save_page_summaries(page_images, page_summaries, utils.IMAGE_FOLDER, 'NIF Training Deck v4')
+# utils.timerstop()
 
 # =============================================================================
 #### Product Setup Type Guide
@@ -588,16 +213,14 @@ timerstop(training_deck_timer, 'NIF Training Deck')
 '''
 Going in collection 2
 '''
-collection_2 = chroma_database.get_or_create_collection(name='setup_type_guide')
+# collection_2 = chroma_database.get_or_create_collection(name='setup_type_guide')
 
-page_images, page_summaries = embed_pdf_multimodal(
-    DOC=os.path.join(utils.DOCUMENT_FOLDER ,'Setup Type Guide.pdf')
-    ,COLLECTION=collection_2              # ChromaDB collection to write to
-    ,IMAGE_FOLDER=utils.IMAGE_FOLDER      # Folder to store page images
-    ,SUMMARY_FN=summary_fn
-    ,EMBEDDING_MODEL=embedding_model
-)
-save_page_summaries(page_images, page_summaries, utils.IMAGE_FOLDER, 'Setup Type Guide')
+# page_images, page_summaries = utils.embed_pdf_multimodal(
+#     DOC=os.path.join(utils.DOCUMENT_FOLDER ,'Setup Type Guide.pdf')
+#     ,COLLECTION=collection_2              # ChromaDB collection to write to
+#     ,IMAGE_FOLDER=utils.IMAGE_FOLDER      # Folder to store page images
+# )
+# utils.save_page_summaries(page_images, page_summaries, utils.IMAGE_FOLDER, 'Setup Type Guide')
 
 # =============================================================================
 #### CASE NIF Training Deck
@@ -605,14 +228,14 @@ save_page_summaries(page_images, page_summaries, utils.IMAGE_FOLDER, 'Setup Type
 '''
 Going in collection 3
 '''
-# collection_3 = chroma_database.get_or_create_collection(name='collection_3')
+# collection_3 = chroma_database.get_or_create_collection(name='data_ops_case')
 #
-# page_images, page_summaries = embed_pdf_multimodal(
+# page_images, page_summaries = utils.embed_pdf_multimodal(
 #     DOC=os.path.join(utils.DOCUMENT_FOLDER, 'Data-Ops-NIF-Create-a-CASE-Training-Deck---11.24.pdf')
 #     ,COLLECTION=collection_3              # ChromaDB collection to write to
 #     ,IMAGE_FOLDER=utils.IMAGE_FOLDER      # Folder to store page images
 # )
-# save_page_summaries(page_images, page_summaries, utils.IMAGE_FOLDER, 'Data-Ops-NIF-Create-a-CASE-Training-Deck')
+# utils.save_page_summaries(page_images, page_summaries, utils.IMAGE_FOLDER, 'Data-Ops-NIF-Create-a-CASE-Training-Deck')
 
 # =============================================================================
 #### RX Guide
@@ -620,14 +243,14 @@ Going in collection 3
 '''
 Going in collection 4
 '''
-# collection_4 = chroma_database.get_or_create_collection(name='collection_4')
+# collection_4 = chroma_database.get_or_create_collection(name='rx_guide')
 #
-# page_images, page_summaries = embed_pdf_multimodal(
+# page_images, page_summaries = utils.embed_pdf_multimodal(
 #     DOC=os.path.join(utils.DOCUMENT_FOLDER, 'RX Guide on Creating an NIF for RX BAR and RX WIP 5.8.25.pdf')
 #     ,COLLECTION=collection_4              # ChromaDB collection to write to
 #     ,IMAGE_FOLDER=utils.IMAGE_FOLDER      # Folder to store page images
 # )
-# save_page_summaries(page_images, page_summaries, utils.IMAGE_FOLDER, 'RX Guide on Creating an NIF for RX BAR')
+# utils.save_page_summaries(page_images, page_summaries, utils.IMAGE_FOLDER, 'RX Guide on Creating an NIF for RX BAR')
 
 # =============================================================================
 #### RX WIP Quick Reference
@@ -635,64 +258,88 @@ Going in collection 4
 '''
 Going in collection 5
 '''
-# collection_5 = chroma_database.get_or_create_collection(name='collection_5')
-#
-# page_images, page_summaries = embed_pdf_multimodal(
+# collection_5 = chroma_database.get_or_create_collection(name='rx_wip_setup_process')
+
+# utils.timerstart('RX WIP Setup Guide')
+# page_images, page_summaries = utils.embed_pdf_multimodal(
 #     DOC=os.path.join(utils.DOCUMENT_FOLDER ,'RX WIP Set-up Process Quick Reference Guide.pdf')
 #     ,COLLECTION=collection_5              # ChromaDB collection to write to
 #     ,IMAGE_FOLDER=utils.IMAGE_FOLDER      # Folder to store page images
 # )
-# save_page_summaries(page_images, page_summaries, utils.IMAGE_FOLDER, 'RX WIP Set-up Process Quick Reference Guide')
+# utils.save_page_summaries(page_images, page_summaries, utils.IMAGE_FOLDER, 'RX WIP Set-up Process Quick Reference Guide')
+# utils.timerstop()
 
-# =============================================================================
-#### Testing
-# =============================================================================
-'''
-test_query = 'What does subtype mean?'
-test_query = 'What does product type mean?'
-test_query = 'What does brand name mean?'
-test_query = 'How do I know what the brand is?'
-test_query = 'What is a planning variant?'
+#%% Testing
+# *****************************************************************************
+if __name__ == '__main__':
+    # test_query = 'What does subtype mean?'
+    # test_query = 'What does product type mean?'
+    # test_query = 'What does brand name mean?'
+    # test_query = 'How do I know what the brand is?'
+    # test_query = 'What is a planning variant?'
+    # test_query = 'How do I select the correct product type and subtype?'
+    test_query = 'Find documents on club products in Canada.'
+    test_query = 'What is the winshuttle form?'
+    test_query = 'What are the RX Setup Types?'
+    
+    # test_query = 'What are the RX WIP setup steps?'
+    
+    # Testing base retriever
+    test_retrieval = utils.query_vectorstore(
+        FOLDER_PATH=os.path.join(utils.VECTORSTORE_FOLDER, 'quick_reference_docs_single_collection_fmoddate')
+        ,QUERY=test_query
+        ,N_RESULTS_PER_COLLECTION=3
+    )
+    print(test_retrieval)
+    
+    num_collections_used = len(test_retrieval['documents'])
+    
+    document_1 = test_retrieval['documents'][0][0]   # First index selects collection. Second index selects document from that collection.
+    test_retrieval['metadatas'][0][0]['document_name']
+    test_retrieval['metadatas'][0][0]['page_number']
+    modified_date = test_retrieval['metadatas'][0][0]['modified_date']
+    dt.strptime(modified_date, "%Y%m%d").date()
+    test_retrieval['distances'][0]
+    
+    image_file_without_path = os.path.basename(document_1)
+    path, image_file_without_path = os.path.split(document_1)
+    image_file_without_path = Path(document_1).name
+    os.path.join(utils.IMAGE_FOLDER, image_file_without_path)
+    
+    def get_filename(path):
+        # Replace backslashes with forward slashes for consistency
+        path = path.replace('\\', '/')
+        # Split on forward slash and get the last element
+        return path.split('/')[-1]
 
-test_query = 'How do I select the correct product type and subtype?'
+    image_file_without_path = get_filename(document_1)
 
-test_query = 'Find documents on club products in Canada.'
-
-test_retrieval = utils.query_vectorstore(
-    FOLDER_PATH=utils.VECTORSTORE_FOLDER
-    ,QUERY=test_query
-    ,N_RESULTS=3
-)
-
-num_collections_used = len(test_retrieval['documents'])
-
-test_retrieval['documents'][0][0]   # First index selects collection. Second index selects document from that collection.
-test_retrieval['metadatas'][0][0]['document_name']
-test_retrieval['metadatas'][0][0]['page_number']
-
-# Testing image query function
-base_path_images = '/assets/doc_images_and_summaries'
-base_path_docs = '/assets/raw_docs'
-
-retrieved_page_images = []  # Initialize
-retrieved_page_links = []         # Initialize
-for i, CLCT in enumerate(test_retrieval['documents']):
-    for j, DOC in enumerate(test_retrieval['documents'][i]):
-        # Get link to page image
-        ret_image = test_retrieval['documents'][i][j]
-        image_file_without_path = os.path.basename(ret_image)
-        image_file_new_path = f"{base_path_images}/{image_file_without_path}"
-        retrieved_page_images.append(image_file_new_path)
-
-        # Get link to page in PDF viewer
-        doc_name = test_retrieval['metadatas'][i][j]['document_name']
-        page_num = test_retrieval['metadatas'][i][j]['page_number']
-        encoded_doc_name = urllib.parse.quote(doc_name)
-        link_to_page = f"{base_path_docs}/{encoded_doc_name}#page={page_num}"
-        retrieved_page_links.append(link_to_page)
-
-# Call image query function to generate answer based on page images
-image_query_prompt = "You will be given a set of images of pages from documents. The pages may contain text, tables, graphs, and images. Use them to answer the user's question."
-
-answer_from_images = utils.query_multiple_images_azureoai(retrieved_page_images, image_query_prompt, test_query)
-'''
+    # =============================================================================
+    #### Testing image query function using all retrieved docs
+    # =============================================================================
+    retrieved_page_images = []      # Initialize
+    retrieved_page_links = []       # Initialize
+    for i, CLCT in enumerate(test_retrieval['documents']):          # Collection i
+        for j, DOC in enumerate(test_retrieval['documents'][i]):    # Document j
+            # Get link to page image
+            ret_image = test_retrieval['documents'][i][j]
+            image_file_without_path = os.path.basename(ret_image)
+            image_file_new_path = os.path.join(utils.IMAGE_FOLDER, image_file_without_path)
+            retrieved_page_images.append(image_file_new_path)
+    
+            # Get link to page in PDF viewer
+            doc_name = test_retrieval['metadatas'][i][j]['document_name']
+            page_num = test_retrieval['metadatas'][i][j]['page_number']
+            encoded_doc_name = urllib.parse.quote(doc_name)
+            link_to_page = os.path.join(utils.DOCUMENT_FOLDER, f"{encoded_doc_name}#page={page_num}")
+            retrieved_page_links.append(link_to_page)
+    
+    # Call image query function to generate answer based on page images
+    image_query_prompt = "You will be given a set of images of pages from documents. The pages may contain text, tables, graphs, and images. Use them to answer the user's question."
+    
+    answer_from_images = utils.query_multiple_images_bedrock(
+        retrieved_page_images
+        ,image_query_prompt
+        ,test_query
+        ,MODEL_ID = "us.anthropic.claude-3-5-sonnet-20241022-v2:0"
+    )

@@ -417,13 +417,40 @@ DOCSEARCH_STRICT_GROUNDING = os.getenv(
     "1", "true", "t", "yes", "y", "on"
 }
 
+DOCSEARCH_QA_RESPONSE_CONTRACT = os.getenv(
+    "DOCSEARCH_QA_RESPONSE_CONTRACT", "true"
+).strip().lower() in {
+    "1", "true", "t", "yes", "y", "on"
+}
+
+_docsearch_short_answer_max_chars_raw = os.getenv(
+    "DOCSEARCH_SHORT_ANSWER_MAX_CHARS", "240"
+).strip()
+try:
+    DOCSEARCH_SHORT_ANSWER_MAX_CHARS = int(_docsearch_short_answer_max_chars_raw)
+except Exception:
+    DOCSEARCH_SHORT_ANSWER_MAX_CHARS = 240
+DOCSEARCH_SHORT_ANSWER_MAX_CHARS = max(80, min(DOCSEARCH_SHORT_ANSWER_MAX_CHARS, 500))
+
+_docsearch_detailed_max_words_raw = os.getenv(
+    "DOCSEARCH_DETAILED_MAX_WORDS", "500"
+).strip()
+try:
+    DOCSEARCH_DETAILED_MAX_WORDS = int(_docsearch_detailed_max_words_raw)
+except Exception:
+    DOCSEARCH_DETAILED_MAX_WORDS = 500
+DOCSEARCH_DETAILED_MAX_WORDS = max(120, min(DOCSEARCH_DETAILED_MAX_WORDS, 1200))
+
 print(
     "> DOCSEARCH config:"
     f" per_collection={DOCSEARCH_RESULTS_PER_COLLECTION},"
     f" max_total_pages={DOCSEARCH_MAX_TOTAL_PAGES},"
     f" min_hits={DOCSEARCH_MIN_HITS},"
     f" max_distance={DOCSEARCH_MAX_DISTANCE},"
-    f" strict_grounding={DOCSEARCH_STRICT_GROUNDING}"
+    f" strict_grounding={DOCSEARCH_STRICT_GROUNDING},"
+    f" qa_contract={DOCSEARCH_QA_RESPONSE_CONTRACT},"
+    f" short_max_chars={DOCSEARCH_SHORT_ANSWER_MAX_CHARS},"
+    f" detailed_max_words={DOCSEARCH_DETAILED_MAX_WORDS}"
 )
 
 REACT_NIF_STEP_ENHANCED = os.getenv(
@@ -1101,6 +1128,10 @@ demo_questions = [{'label': i, 'value': i, 'disabled': False} for i in ["Get sta
 
 GUIDANCE_QUESTION = 'NIF step by step'
 
+# Module 1 and 2 submit messages (QA-style triggers for docsearch prompt flow).
+MODULE_1_SUBMIT_MESSAGE = 'Get started on training resources'
+MODULE_2_SUBMIT_MESSAGE = 'Get started understanding NIF fields'
+
 # Define the new options for the Guidance NIF Menu
 NIF_MENU_OPTIONS = [
     {'label': 'New NIF chat session', 'value': 'NEW_NIF_CHAT'},
@@ -1247,6 +1278,81 @@ def remove_tool_calls(text):
     cleaned_text = re.sub(r'\n\s*\n\s*\n', '\n\n', cleaned_text)
 
     return cleaned_text.strip()
+
+
+def _truncate_words(text: str, max_words: int) -> str:
+    cleaned = str(text or "").strip()
+    if not cleaned or max_words <= 0:
+        return cleaned
+    words = cleaned.split()
+    if len(words) <= max_words:
+        return cleaned
+    return " ".join(words[:max_words]).rstrip(" ,;:") + "..."
+
+
+def _extract_short_and_detailed_answer(answer_text: str) -> Tuple[str, str]:
+    cleaned = remove_tool_calls(str(answer_text or ""))
+    cleaned = cleaned.replace("<TOOL_RESULT>", "")
+    cleaned = re.sub(r"(?is)\bDONE\.?\s*$", "", cleaned).strip()
+    cleaned = re.sub(r"(?is)\n\s*Sources used:\s*[\s\S]*$", "", cleaned).strip()
+
+    short_answer = ""
+    detailed_answer = ""
+
+    short_match = re.search(
+        r"(?is)\bSHORT ANSWER:\s*(.*?)\s*(?=\bDETAILED ANSWER:|$)",
+        cleaned,
+    )
+    detailed_match = re.search(r"(?is)\bDETAILED ANSWER:\s*(.*)$", cleaned)
+
+    if short_match:
+        short_answer = short_match.group(1).strip()
+    if detailed_match:
+        detailed_answer = detailed_match.group(1).strip()
+
+    if not detailed_answer:
+        if short_match:
+            remainder = cleaned.replace(short_match.group(0), "").strip()
+            detailed_answer = remainder or short_answer
+        else:
+            detailed_answer = cleaned
+
+    if not short_answer:
+        detailed_for_short = re.sub(r"\s+", " ", detailed_answer).strip()
+        first_sentence = re.split(r"(?<=[.!?])\s+", detailed_for_short, maxsplit=1)[0].strip()
+        candidate = first_sentence or detailed_for_short
+        max_chars = DOCSEARCH_SHORT_ANSWER_MAX_CHARS
+        if len(candidate) > max_chars:
+            candidate = candidate[:max_chars].rstrip(" ,;:") + "..."
+        short_answer = candidate
+
+    if not short_answer:
+        short_answer = "I couldn't find a clear answer in the retrieved training pages."
+    if not detailed_answer:
+        detailed_answer = "I couldn't find relevant information in the training documents for your query."
+
+    detailed_answer = _truncate_words(detailed_answer, DOCSEARCH_DETAILED_MAX_WORDS)
+    return short_answer.strip(), detailed_answer.strip()
+
+
+def format_docsearch_contract_response(answer_text: str, sources_markdown: str = "") -> str:
+    if not DOCSEARCH_QA_RESPONSE_CONTRACT:
+        base_answer = remove_tool_calls(str(answer_text or "")).strip()
+        if not sources_markdown.strip():
+            return base_answer
+        return f"{base_answer}\n\nSources used:\n{sources_markdown.strip()}"
+
+    short_answer, detailed_answer = _extract_short_and_detailed_answer(answer_text)
+    sources = str(sources_markdown or "").strip()
+    if not sources:
+        sources = "- (No sources available.)"
+
+    return (
+        "<TOOL_RESULT>\n\n"
+        f"SHORT ANSWER:\n{short_answer}\n\n"
+        f"DETAILED ANSWER:\n{detailed_answer}\n\n"
+        f"Sources used:\n{sources}"
+    )
 
 
 def parse_function_arguments(function_arguments):
@@ -4122,7 +4228,7 @@ class retrieve_and_answer_tool(lr.agent.ToolMessage):
     request:str = "retrieve_and_answer"
 
     # purpose: a description of what this function does. A good description is important so the LLM knows how to use it.
-    purpose:str = "Query a vectorstore to retrieve relevant documents. Return an answer and the list of documents used."
+    purpose:str = "Query a collection of NIF training documents and return comprehensive answers with source information."
 
     # Any other variables defined here before the handle() method are treated as required arguments
     QUERY:str   # Plain text query
@@ -4143,10 +4249,8 @@ class retrieve_and_answer_tool(lr.agent.ToolMessage):
                 ,USE_CACHE=True
             )
         except Exception as err:
-            return (
-                "I couldn't access the training-resource index. "
-                "Please ensure the local vectorstore is built and populated, then try again.\n\n"
-                f"Details: {err}"
+            return format_docsearch_contract_response(
+                f"I apologize, I encountered an issue searching the documents: {err}"
             )
 
         selected_hits = utils.select_vectorstore_hits(
@@ -4156,10 +4260,8 @@ class retrieve_and_answer_tool(lr.agent.ToolMessage):
         )
 
         if len(selected_hits) < DOCSEARCH_MIN_HITS:
-            return (
-                "I could not find enough relevant training-resource pages for that question.\n\n"
-                "Try broader terms (for example: `NIF training deck`, `BOM training`, "
-                "`material master`, `new hire guide`) and submit again."
+            return format_docsearch_contract_response(
+                "I couldn't find relevant information in the training documents for your query."
             )
 
         # Parse retrieved docs
@@ -4196,10 +4298,8 @@ class retrieve_and_answer_tool(lr.agent.ToolMessage):
             retrieved_page_links.append(link_as_markdown)
 
         if len(retrieved_page_images) == 0:
-            return (
-                "I could not find relevant training-resource pages for that question.\n\n"
-                "Try broader terms (for example: `NIF training deck`, `BOM training`, "
-                "`material master`, `new hire guide`) and submit again."
+            return format_docsearch_contract_response(
+                "I couldn't find relevant information in the training documents for your query."
             )
 
         formatted_sources_list = formatted_list(retrieved_page_links)
@@ -4237,27 +4337,13 @@ class retrieve_and_answer_tool(lr.agent.ToolMessage):
                 provider=vectorstore_provider,
             )
         except Exception as err:
-            if vectorstore_provider == "openai":
-                return (
-                    "I found relevant training-resource pages, but I couldn't run the OpenAI vision step.\n\n"
-                    "Check APP_LLM_PROVIDER=openai, OPENAI_API_KEY, OPENAI_BASE_URL, "
-                    "and OPENAI_VISION_MODEL/APP_LLM_MODEL in .env.\n\n"
-                    f"Details: {err}\n\nSources used:\n{formatted_sources_list}"
-                )
-            return (
-                "I found relevant training-resource pages, but I couldn't run the Bedrock vision step.\n\n"
-                "Check APP_LLM_PROVIDER=bedrock and either IAM auth or "
-                "BEDROCK_AUTH_MODE=api_key with AWS_BEARER_TOKEN_BEDROCK. "
-                "Also verify region/model access in .env.\n\n"
-                f"Details: {err}\n\nSources used:\n{formatted_sources_list}"
+            return format_docsearch_contract_response(
+                "I apologize, I encountered an error while searching the documents: "
+                f"{err}",
+                formatted_sources_list,
             )
 
-        # Generate the final Markdown string including answer and sources
-        final_output_string = answer_from_images
-        final_output_string += "\n\nSources used:\n"
-        final_output_string += formatted_sources_list
-
-        return final_output_string
+        return format_docsearch_contract_response(answer_from_images, formatted_sources_list)
 
 # Kristen's version
 # class retrieve_and_answer_tool(lr.agent.ToolMessage):
@@ -4338,23 +4424,98 @@ def create_nif_docsearch_task(
         nif_docsearch_agent
         ,name='DocRetrievalAgent'
         ,system_message=f'''
-            You are a helpful assistant with access to a set of documents in a
-            vector store.
-    
+            You are a document search agent that serves as a wrapper for the doc_search.get_answer function.
+            Your job is to take user queries and pass them to the retrieve_and_answer tool,
+            then return the exact
+            response from that function.
+
+            If the user asks for a step by step guide to start the NIF, tell them
+            to click the 'NIF step by step' button above.
+
+            If the user asks to search for information about a previously submitted NIF,
+            tell them to click the 'Search NIF History' button above.
+
             {llm_instruction_scope_of_discussion}
 
-            When you receive a question, pass it to the 'retrieve_and_answer'
-            function. This function will return a single string containing
-            the answer to the user's question followed by a list of relevant
-            documents formatted as Markdown links.
+            **CRITICAL**: When asked about RX setup types, even as the first question,
+            always return an answer.
 
-            Never add facts that are not in the tool output. If evidence is
-            insufficient, return the tool's abstention message as-is.
-        
-            If the 'retrieve_and_answer' function does not return anything, say
-            "I apologize, I cannot find any relevant results in the documents."
+            # BEGINNING THE CONVERSATION
+
+            If the user says "{MODULE_1_SUBMIT_MESSAGE}", say
+            "DONE. Hello! I can help you search NIF training documents. What would you like to know?".
+
+            If the user says "{MODULE_2_SUBMIT_MESSAGE}", say
+            "DONE. Which field or fields would you like help with?".
+
+            # INSTRUCTIONS
+
+            1. If the user query is a greeting (like "hello", "hi", "how are you"), respond with:
+               "DONE. Hello! I can help you search NIF training documents. What would you like to know?"
+
+            2. For ALL OTHER queries, call the 'retrieve_and_answer' function/tool EXACTLY ONCE with the
+               user's query as the QUERY parameter. Do NOT call it multiple times.
+
+            3. **CRITICAL**: When the 'retrieve_and_answer' function returns a response,
+               format your response as: "DONE. [FUNCTION_RESPONSE_CONTENT]"
+               - OUTPUT ONLY THE CONTENT FROM THE FUNCTION
+               - Do not change the format of the response from the tool, preserve the structure but also maintain the "DONE." formatting.
+               - Do NOT show tool syntax, JSON objects, or technical details
+               - Only show the actual answer content to the user
+               - IMMEDIATELY end with DONE after showing the response
+
+            4. **NEVER** show tool syntax like "TOOL:", JSON objects, or technical details.
+               Only show the actual answer content to the user.
+
+            5. If the function returns an error, respond with:
+               "DONE. I apologize, I couldn't find relevant information in the training documents."
+
+            6. Do NOT add any additional information, explanations, or formatting beyond
+               what is returned by the retrieve_and_answer function. Make sure the detailed answer from the
+               tool is no longer than 500 words. When shortening the detailed answer if required make sure
+               any important details are not missed, do not shorten the answer if not required.
+
+            7. **IMPORTANT**: After calling the retrieve_and_answer tool ONCE and providing the response,
+               ALWAYS end with "DONE" to terminate the conversation turn.
+
+            If the user asks for a step by step guide to start the NIF, tell them
+            to click the 'NIF step by step' button above.
+
+            If the user asks to search for information about a previously submitted NIF,
+            tell them to click the 'Search NIF History' button above.
+
+            2. **CRITICAL**: When the 'retrieve_and_answer' function returns an answer,
+            say "DONE" and **REPEAT THE ANSWER VERBATIM WITHOUT ANY ADDITIONAL COMMENTARY**.
+            Be sure to include the Sources Used.
+            Do this **EVERY TIME** you get an answer from the 'retrieve_and_answer' function.
+
+            3. If the 'retrieve_and_answer' function does not return an answer, try
+            modifying your query and submitting it again. If you get an answer, say "DONE"
+            and **REPEAT THE ANSWER VERBATIM WITHOUT ANY ADDITIONAL COMMENTARY**.
+
+            If the 'retrieve_and_answer' function does not return an answer a second
+            time, say:
+                "DONE. I apologize, I cannot find any relevant results in the training documents."
+
+            # HELPFUL BEHAVIORS
+
+            - Whenever repeating an answer to a question, ALWAYS include the full source citation
+            from your original answer. Do not trim it down.
+
+            - Create a Markdown table when appropriate to organize information about multiple steps
+            or fields, being sure to use newlines for correct formatting like so:
+                <newline>
+                | <column 1>  | <column 2>     |<column 3>    |<newline>
+                |:------------|:---------------|:-------------|<newline>
+                | <row 1>     |                |              |<newline>
+                | <row 2>     |                |              |<newline>
+                | <row 3>     |                |              |<newline>
+                <etc.>
+                <newline>
         '''
         ,interactive=False
+        ,restart=False
+        ,max_stalled_steps=2
     )
     
     return nif_docsearch_task
@@ -6011,11 +6172,13 @@ def update_textarea_and_trigger_submit_chat(selected_question, current_clicks, u
         #     )
 
     if selected_question == 'NIF field question':
-        active_task_name = 'nifguide_task'
-        display_text = "NIF Field module is not yet available."
+        active_task_name = 'nif_docsearch_task'
+        display_text = "Continuing conversation with NIF Field agent"
+        submit_text = MODULE_2_SUBMIT_MESSAGE
+        new_clicks = (current_clicks or 0) + 1
         return (
-            no_update,      # Human chat area
-            no_update,      # Submit button
+            submit_text,    # Human chat area
+            new_clicks,     # Submit button
             no_update,      # NIF progress data
             active_task_name,      # Active task name
             display_text,    # Simple message
@@ -6053,22 +6216,9 @@ def update_textarea_and_trigger_submit_chat(selected_question, current_clicks, u
 
     if selected_question == 'Get started on training resources':
         active_task_name = 'nif_docsearch_task'
-        display_text = ''
-        submit_text = "What training resources are available for NIF and what are the key topics they cover?"
+        display_text = "Continuing conversation with Training Document agent"
+        submit_text = MODULE_1_SUBMIT_MESSAGE
         new_clicks = (current_clicks or 0) + 1
-
-        # Display base set of reference links
-        '''
-        Favorites documents from meeting notes:
-        UPDATE: see email from Bev 11/4
-            Full NIF Training Deck v4
-            BOM Training Material
-            A file from Jamie (Tamara capturing)
-            Material Master PowerBI Report
-            New Hire Guide
-            - This contains links about how to get access.
-            RX documentation
-        '''
         return (
             submit_text,    # Human chat area
             new_clicks,     # Submit button
@@ -6135,9 +6285,7 @@ def chat_bot(n_sub, human_chat_value, user_data, sid, user_nif_progress_json, ac
             session_task = get_session_task('nif_database_task', sid, active_user_name)
 
         elif active_task_name == 'nif_docsearch_task':
-            # Retrieval module runs tool directly in callback to avoid an extra
-            # orchestration LLM hop that can fail before retrieval executes.
-            session_task = None
+            session_task = get_session_task('nif_docsearch_task', sid, active_user_name)
 
         else:
             return (
@@ -6187,32 +6335,6 @@ def chat_bot(n_sub, human_chat_value, user_data, sid, user_nif_progress_json, ac
             prior_nif_last_qid, prior_nif_last_answer = _extract_nif_last_progress_markers(
                 user_nif_progress_df
             )
-
-        if active_task_name == 'nif_docsearch_task':
-            try:
-                full_response = retrieve_and_answer_tool(QUERY=human_chat_value).handle()
-            except Exception as err:
-                full_response = (
-                    "I couldn't run training-resource retrieval.\n\n"
-                    "Please verify vectorstore and model credentials, then try again.\n\n"
-                    f"Details: {err}"
-                )
-
-            if not full_response or not str(full_response).strip():
-                full_response = (
-                    "I couldn't find relevant results in the training-resource index. "
-                    "Please try a broader query."
-                )
-
-            full_response = str(full_response).replace('DONE.', '').replace('DONE', '')
-
-            if extra_output_bool:
-                full_response = f"<DocRetrievalAgent>         {full_response}          (Session ID: {sid})"
-
-            if not extra_output_bool:
-                full_response = remove_tool_calls(full_response)
-
-            return full_response, no_update, '', None, None
 
         # Did turns=1 break user nif progress df update? YES!!
         # session_task.run(human_chat_value, session_id=sid, turns=1)    # Turns=1 ensures the agent doesn't get into a loop
