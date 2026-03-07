@@ -10,7 +10,7 @@ import FaIcon from "./FaIcon";
 import NifSearchQueryPanel from "./NifSearchQueryPanel";
 import type { ChatMessage, ModuleConfig } from "../types";
 
-const TRAINING_SUMMARY_QUESTION = "What training resources are available for NIF and what are the key topics they cover?";
+const TRAINING_WELCOME_MESSAGE = "Hello! I can help you search NIF training documents. What would you like to know?";
 
 interface ChatModulePageProps {
   module: ModuleConfig;
@@ -151,25 +151,7 @@ export default function ChatModulePage({
 
         const nextMessages: ChatMessage[] = [];
         if (module.key === "training") {
-          const nextClicks = (selected.submit_clicks || 0) + 1;
-          setSubmitClicks(nextClicks);
-          nextMessages.push({ role: "user", content: TRAINING_SUMMARY_QUESTION });
-
-          const turn = await submitChatTurn({
-            session_id: selected.session_id,
-            submit_clicks: nextClicks,
-            human_chat_value: TRAINING_SUMMARY_QUESTION,
-            nif_progress_data_json: selected.nif_progress_data_json || nifProgressJson,
-            active_task_name: selected.active_task_name || activeTaskName,
-          });
-
-          if (cancelled) {
-            return;
-          }
-
-          setSessionId(turn.session_id || selected.session_id || sessionId);
-          setNifProgressJson(turn.nif_progress_data_json || nifProgressJson);
-          nextMessages.push({ role: "assistant", content: turn.response_markdown || "" });
+          nextMessages.push({ role: "assistant", content: TRAINING_WELCOME_MESSAGE });
           setMessages(nextMessages);
           return;
         }
@@ -284,7 +266,7 @@ export default function ChatModulePage({
         <Box className="chat-scroll" ref={chatScrollRef}>
           {messages.length === 0 ? (
             <Typography variant="body2" color="text.secondary">
-              {module.key === "training" ? "Getting response to - What training resources are available for NIF and what are the key topics they cover? " : "Ask a question to begin."}
+              Ask a question to begin.
             </Typography>
           ) : null}
 
