@@ -1,6 +1,9 @@
 import type {
   ChatTurnResponse,
   HealthLiveResponse,
+  HistoryClearResponse,
+  HistoryRange,
+  HistoryResponse,
   ModuleSelectResponse,
   NifProgressPreviewResponse,
   NifSaveSessionResponse,
@@ -178,4 +181,26 @@ export async function downloadNifFile(payload: {
   anchor.click();
   anchor.remove();
   window.URL.revokeObjectURL(url);
+}
+
+export async function fetchHistory(payload: {
+  session_id: string;
+  range: HistoryRange;
+}): Promise<HistoryResponse> {
+  const params = new URLSearchParams({
+    session_id: payload.session_id,
+    range: payload.range,
+  });
+  return requestJson<HistoryResponse>(`/api/v1/history?${params.toString()}`, {
+    method: "GET",
+  });
+}
+
+export async function clearHistory(payload: {
+  session_id: string;
+}): Promise<HistoryClearResponse> {
+  return requestJson<HistoryClearResponse>("/api/v1/history/clear", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
 }

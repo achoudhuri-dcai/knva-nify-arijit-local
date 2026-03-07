@@ -104,3 +104,28 @@ export interface NifProgressPreviewResponse {
   message: string;
   progress_text: string;
 }
+
+export type HistoryRange = "current" | "past_30_days";
+
+export interface HistoryMessage {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  timestamp_utc: string;
+}
+
+export interface HistoryResponse {
+  session_id: string;
+  range: HistoryRange;
+  messages: HistoryMessage[];
+}
+
+export interface HistoryClearResponse {
+  ok: boolean;
+  code: string;
+  message: string;
+  session_id: string;
+  removed_history_files: number;
+  removed_nif_files: number;
+  nif_progress_data_json: string;
+}

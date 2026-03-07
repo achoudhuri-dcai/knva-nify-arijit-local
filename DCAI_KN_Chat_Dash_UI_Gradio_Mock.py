@@ -1271,8 +1271,41 @@ def remove_tool_calls(text):
     pattern = r'TOOL:\s*(?:\w+\s*)?\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}'
     cleaned_text = re.sub(pattern, '', raw_text)
 
+    # Remove XML-style tool wrapper blocks that sometimes appear in assistant content.
+    cleaned_text = re.sub(r'(?is)<tool_response>\s*.*?\s*</tool_response>', '', cleaned_text)
+    cleaned_text = re.sub(r'(?is)<tool_result>\s*.*?\s*</tool_result>', '', cleaned_text)
+    cleaned_text = re.sub(r'(?is)<tool>\s*.*?\s*</tool>', '', cleaned_text)
+
     # Remove any remaining TOOL lines defensively.
     cleaned_text = re.sub(r'(?im)^\s*TOOL:\s*.*$', '', cleaned_text)
+    cleaned_text = re.sub(r'(?im)^\s*<TOOL>\s*.*$', '', cleaned_text)
+    cleaned_text = re.sub(r'(?im)^\s*</?tool_response>\s*$', '', cleaned_text)
+    cleaned_text = re.sub(r'(?im)^\s*</?tool_result>\s*$', '', cleaned_text)
+    cleaned_text = re.sub(r'(?im)^\s*</?tool>\s*$', '', cleaned_text)
+
+    # Some model/tool paths leak wrapper labels such as "tool_response:".
+    cleaned_text = re.sub(r'(?im)^\s*["\']?tool_response["\']?\s*:\s*', '', cleaned_text)
+    cleaned_text = re.sub(r'(?im)^\s*["\']?tool_result["\']?\s*:\s*', '', cleaned_text)
+    cleaned_text = re.sub(r'(?i)<tool_result>', '', cleaned_text)
+    cleaned_text = re.sub(r'(?i)</tool_result>', '', cleaned_text)
+    cleaned_text = re.sub(r'(?i)<tool_response>', '', cleaned_text)
+    cleaned_text = re.sub(r'(?i)</tool_response>', '', cleaned_text)
+    cleaned_text = re.sub(r'(?i)<tool_result\\s*/>', '', cleaned_text)
+    cleaned_text = re.sub(r'(?i)<tool_response\\s*/>', '', cleaned_text)
+
+    # If the entire payload is a JSON object wrapper, unwrap common response keys.
+    stripped = cleaned_text.strip()
+    if stripped.startswith("{") and stripped.endswith("}"):
+        try:
+            parsed = json.loads(stripped)
+            if isinstance(parsed, dict):
+                for key in ("tool_response", "response_markdown", "response", "answer", "content"):
+                    value = parsed.get(key)
+                    if isinstance(value, str) and value.strip():
+                        cleaned_text = value
+                        break
+        except Exception:
+            pass
 
     # Clean up extra whitespace/newlines that may result
     cleaned_text = re.sub(r'\n\s*\n\s*\n', '\n\n', cleaned_text)
@@ -4445,8 +4478,7 @@ def create_nif_docsearch_task(
             If the user says "{MODULE_1_SUBMIT_MESSAGE}", say
             "DONE. Hello! I can help you search NIF training documents. What would you like to know?".
 
-            If the user says "{MODULE_2_SUBMIT_MESSAGE}", say
-            "DONE. Which field or fields would you like help with?".
+            If the user says "{MODULE_2_SUBMIT_MESSAGE}", say "DONE. Which field or fields would you like help with?".
 
             # INSTRUCTIONS
 
@@ -5437,7 +5469,7 @@ def initialize_and_switch_buttons(selected_value, user_data):
     # ----------------------------------------------------
     # Case 4: Other modules that are active
     # ----------------------------------------------------
-    elif selected_value in ['Search NIF', 'Get started on training resources']:
+    elif selected_value in ['Search NIF', 'Get started on training resources', 'NIF field question']:
         return (
             no_update,              # Don't change NIF step by step buttons above
             no_update,              # Don't change selected question
@@ -6173,7 +6205,8 @@ def update_textarea_and_trigger_submit_chat(selected_question, current_clicks, u
 
     if selected_question == 'NIF field question':
         active_task_name = 'nif_docsearch_task'
-        display_text = "Continuing conversation with NIF Field agent"
+        friendly_name = 'NIF Field agent'
+        display_text = f'Continuing conversation with {friendly_name}'
         submit_text = MODULE_2_SUBMIT_MESSAGE
         new_clicks = (current_clicks or 0) + 1
         return (
@@ -6216,7 +6249,8 @@ def update_textarea_and_trigger_submit_chat(selected_question, current_clicks, u
 
     if selected_question == 'Get started on training resources':
         active_task_name = 'nif_docsearch_task'
-        display_text = "Continuing conversation with Training Document agent"
+        friendly_name = 'Training Document agent'
+        display_text = f'Continuing conversation with {friendly_name}'
         submit_text = MODULE_1_SUBMIT_MESSAGE
         new_clicks = (current_clicks or 0) + 1
         return (
@@ -7270,6 +7304,75 @@ def _allowed_react_origins():
     }
 
 
+def _history_role_to_react(role_value) -> str:
+    role_text = str(getattr(role_value, "value", role_value) or "").strip().lower()
+    if role_text == "user":
+        return "user"
+    if role_text in {"assistant", "ai"}:
+        return "assistant"
+    return ""
+
+
+def _coerce_history_timestamp(value) -> Optional[dt.datetime]:
+    if value is None:
+        return None
+    if isinstance(value, dt.datetime):
+        if value.tzinfo is None:
+            return value.replace(tzinfo=dt.UTC)
+        return value.astimezone(dt.UTC)
+    try:
+        parsed = dt.datetime.fromisoformat(str(value))
+        if parsed.tzinfo is None:
+            return parsed.replace(tzinfo=dt.UTC)
+        return parsed.astimezone(dt.UTC)
+    except Exception:
+        return None
+
+
+def _react_history_messages(user_email: str, session_id: str, range_name: str):
+    range_clean = str(range_name or "").strip().lower()
+    if range_clean not in {"current", "past_30_days"}:
+        range_clean = "current"
+
+    if range_clean == "past_30_days":
+        history_messages = load_chat_history(user_email, SESSION_ID=None, include_system=False)
+    else:
+        history_messages = load_chat_history(user_email, SESSION_ID=session_id, include_system=False)
+
+    now_utc = dt.datetime.now(dt.UTC)
+    min_utc = now_utc - dt.timedelta(days=30)
+    out = []
+
+    for idx, msg in enumerate(history_messages or []):
+        role = _history_role_to_react(getattr(msg, "role", ""))
+        if not role:
+            continue
+        content = str(getattr(msg, "content", "") or "").strip()
+        if not content:
+            continue
+        content = remove_tool_calls(content)
+        if not content:
+            continue
+
+        msg_ts = _coerce_history_timestamp(getattr(msg, "timestamp", None))
+        if range_clean == "past_30_days":
+            if msg_ts is None or msg_ts < min_utc:
+                continue
+
+        # QA history panel shows latest first.
+        out.append(
+            {
+                "id": f"hist-{idx}-{role}",
+                "role": role,
+                "content": content,
+                "timestamp_utc": msg_ts.isoformat() if msg_ts else "",
+            }
+        )
+
+    out.reverse()
+    return out, range_clean
+
+
 @app.server.after_request
 def _apply_api_cors_headers(response):
     """
@@ -7568,6 +7671,98 @@ def api_select_module():
             "active_task_name": active_task_name,
             "simple_message": simple_message,
             "auto_submit": auto_submit,
+        }
+    )
+
+
+@app.server.route("/api/v1/history", methods=["GET"])
+def api_history_get():
+    user_payload = _api_user_payload()
+    user_email = str(user_payload.get("email", "user@email.com") or "user@email.com").strip()
+    range_name = str(request.args.get("range", "current") or "current").strip()
+    session_id = str(request.args.get("session_id", "") or "").strip() or generate_session_id()
+
+    try:
+        messages, range_clean = _react_history_messages(user_email, session_id, range_name)
+    except Exception as err:
+        return (
+            flask.jsonify(
+                {
+                    "code": "history_load_failed",
+                    "message": f"Failed to load history. Details: {err}",
+                }
+            ),
+            500,
+        )
+
+    return flask.jsonify(
+        {
+            "session_id": session_id,
+            "range": range_clean,
+            "messages": messages,
+        }
+    )
+
+
+@app.server.route("/api/v1/history/clear", methods=["POST"])
+def api_history_clear():
+    payload = request.get_json(silent=True) or {}
+    active_sid = str(payload.get("session_id", "") or "").strip()
+    user_payload = _api_user_payload()
+    active_user_name = str(user_payload.get("name", "User") or "User")
+    active_user_email = str(user_payload.get("email", "user@email.com") or "user@email.com")
+
+    # Clear in-memory agent history for the active session.
+    if active_sid:
+        for task_name, session_id in list(session_tasks.keys()):
+            if session_id != active_sid:
+                continue
+            try:
+                session_task = get_session_task(task_name, session_id, active_user_name)
+                session_agent = session_task.agent
+                session_agent.clear_history(start=-len(session_agent.message_history))
+            except Exception:
+                pass
+
+    # Clear in-memory NIF backend autosave state for this user as well.
+    clear_nif_backend_user_state(active_user_email)
+
+    # Clear persisted history files.
+    removed_history = 0
+    user_history_dir = get_user_history_dir(active_user_email)
+    for filename in get_available_files(user_history_dir):
+        full_path = os.path.join(user_history_dir, filename)
+        try:
+            os.remove(full_path)
+            removed_history += 1
+        except Exception:
+            pass
+
+    # Clear saved in-progress NIF files.
+    removed_nif_files = 0
+    user_nif_progress_dir = get_user_nif_progress_dir(active_user_email)
+    for filename in get_available_files(user_nif_progress_dir):
+        full_path = os.path.join(user_nif_progress_dir, filename)
+        try:
+            os.remove(full_path)
+            removed_nif_files += 1
+        except Exception:
+            pass
+
+    if removed_history > 0:
+        message = "Chat history has been cleared successfully!"
+    else:
+        message = "No chat history to clear."
+
+    return flask.jsonify(
+        {
+            "ok": True,
+            "code": "ok",
+            "message": message,
+            "session_id": active_sid,
+            "removed_history_files": removed_history,
+            "removed_nif_files": removed_nif_files,
+            "nif_progress_data_json": pd.DataFrame(index=[0]).to_json(orient="split"),
         }
     )
 

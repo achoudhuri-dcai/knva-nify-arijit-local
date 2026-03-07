@@ -882,6 +882,29 @@ body.theme-dark .chat-markdown-link {
   justify-content: flex-start;
 }
 
+.history-chat-shell {
+  min-height: 420px;
+  max-height: 62vh;
+  border-radius: 12px;
+  border: 1px solid var(--chat-panel-border);
+  background: var(--chat-panel-bg);
+}
+
+.history-chat-scroll {
+  height: 100%;
+  max-height: 62vh;
+  overflow: auto;
+  padding: 8px;
+}
+
+.history-date-header {
+  display: block;
+  text-align: center;
+  margin: 8px 0 10px;
+  font-weight: 700 !important;
+  opacity: 0.9;
+}
+
 .chat-avatar {
   width: 24px !important;
   height: 24px !important;

@@ -2,6 +2,7 @@ import {
   faBars,
   faClipboardCheck,
   faCircleQuestion,
+  faClockRotateLeft,
   faGraduationCap,
   faMagnifyingGlass,
   faMoon,
@@ -17,6 +18,7 @@ import { createSession, fetchHealthLive } from "./api/client";
 import helpContentJson from "./config/help-content.json";
 import ChatModulePage from "./components/ChatModulePage";
 import FaIcon from "./components/FaIcon";
+import HistoryDialog from "./components/HistoryDialog";
 import NifStepSessionPage from "./components/NifStepSessionPage";
 import type { ModuleConfig, ModuleKey } from "./types";
 
@@ -82,6 +84,7 @@ export default function App() {
   ));
   const [isNavExpanded, setIsNavExpanded] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState<boolean>(() => {
     const stored = window.localStorage.getItem(THEME_KEY);
     return stored === "dark";
@@ -277,6 +280,16 @@ export default function App() {
           </Stack>
           <Box className="side-nav-theme-slot">
             <Stack className="side-nav-utility-stack" spacing={0.8}>
+              <Tooltip title="Show History">
+                <IconButton
+                  size="small"
+                  className="side-nav-theme-btn"
+                  onClick={() => setHistoryOpen(true)}
+                  aria-label="Show History"
+                >
+                  <FaIcon icon={faClockRotateLeft} />
+                </IconButton>
+              </Tooltip>
               <Tooltip title={isDarkMode ? "Switch to day mode" : "Switch to dark mode"}>
                 <IconButton
                   size="small"
@@ -383,6 +396,14 @@ export default function App() {
           </Stack>
         </Box>
       </Drawer>
+
+      <HistoryDialog
+        open={historyOpen}
+        onClose={() => setHistoryOpen(false)}
+        sessionId={sessionId}
+        setSessionId={setSessionId}
+        setNifProgressJson={setNifProgressJson}
+      />
     </Box>
   );
 }
