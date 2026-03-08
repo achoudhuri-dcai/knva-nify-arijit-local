@@ -1,0 +1,178 @@
+name: dcai-knova-nifty
+
+services:
+  
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.11.0
+    container_name: elasticsearch
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - "ES_JAVA_OPTS=-Xms1g -Xmx1g"
+      - path.repo=/usr/share/elasticsearch/backup
+    ports:
+      - "9200:9200"
+      - "9300:9300"
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data
+      - ./es_backup:/usr/share/elasticsearch/backup
+    networks:
+      - shared-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  init_restore:
+    image: curlimages/curl:8.5.0
+    container_name: init_restore
+    depends_on:
+      - elasticsearch
+    command:
+      - sh
+      - -euc
+      - |
+        echo 'Waiting for Elasticsearch...'
+        until curl -s http://elasticsearch:9200 >/dev/null; do
+          sleep 5
+        done
+
+        echo 'Elasticsearch ready'
+        echo 'Registering snapshot repository...'
+
+        curl -sS -X PUT 'http://elasticsearch:9200/_snapshot/project_indexes_backup' \
+          -H 'Content-Type: application/json' \
+          -d '{"type":"fs","settings":{"location":"/usr/share/elasticsearch/backup/project_indexes_backup"}}'
+
+        echo 'Restoring snapshot...'
+
+        curl -sS -X POST 'http://elasticsearch:9200/_snapshot/project_indexes_backup/document_indexes_v2/_restore' \
+          -H 'Content-Type: application/json' \
+          -d '{"include_global_state":false}'
+
+        echo 'Restore finished'
+    networks:
+      - shared-network
+    restart: "no"
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.11.0
+    container_name: kibana
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+    ports:
+      - "5601:5601"
+    depends_on:
+      - elasticsearch
+    networks:
+      - shared-network
+    restart: unless-stopped
+
+  dcai-app:
+    image: python:3.12-slim
+    container_name: dcai-app
+    working_dir: /app
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app
+      - python_env:/opt/python_env
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    networks:
+      - shared-network
+      - opik_default 
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "[ -f /opt/python_env/pyvenv.cfg ] && [ -f /tmp/pip_install_complete ] && curl -f http://localhost:8000 || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
+    environment:
+      - ELASTICSEARCH_HOST=elasticsearch
+      - ELASTICSEARCH_PORT=9200
+      - REACT_UI_ALLOWED_ORIGINS=http://localhost:5174,http://127.0.0.1:5174,http://localhost:5173,http://127.0.0.1:5173
+      - LOCAL_DEV_AUTH_BYPASS=true
+      - DASH_HOST=0.0.0.0
+      - DASH_PORT=8000
+      - PYTHON_ENV_PATH=/opt/python_env
+      - OPIK_URL_OVERRIDE=http://opik-backend-1:8080
+      - OPIK_TRACE_ENABLED=true
+      - OPIK_OTLP_ENDPOINT=http://otel-collector:4317
+      - OPIK_OTLP_INSECURE=true
+      - OPIK_PROJECT_NAME=knva-nifty
+      - OPIK_SERVICE_NAME=dcai-app
+      - OPIK_ENV=local
+      - OPIK_TRACE_SAMPLE_RATE=1.0
+      - OPIK_SDK_TRACE_ENABLED=true
+      - OPIK_SDK_HOST=http://opik-backend-1:8080
+      - OPIK_SDK_WORKSPACE=default
+      - OPIK_SDK_PROJECT_NAME=Default Project
+    command: >
+      sh -c "
+      apt-get update && apt-get install -y gcc g++ curl python3-venv &&
+      if [ -d $$PYTHON_ENV_PATH ] && [ -f $$PYTHON_ENV_PATH/pyvenv.cfg ]; then
+        echo 'Python environment exists.';
+      else
+        echo 'Creating Python environment...';
+        python3 -m venv $$PYTHON_ENV_PATH;
+      fi &&
+      echo 'Activating Python environment and installing packages...' &&
+      . $$PYTHON_ENV_PATH/bin/activate &&
+      if [ ! -f /tmp/pip_install_complete ]; then
+        echo 'Installing Python packages...' &&
+        pip install --no-cache-dir --upgrade pip &&
+        pip install --no-cache-dir -r requirements_python3_12_11.txt &&
+        touch /tmp/pip_install_complete;
+      else
+        echo 'Python packages already installed.';
+      fi &&
+      echo 'Waiting for Elasticsearch...' &&
+      until curl -s http://elasticsearch:9200/_cat/health > /dev/null; do 
+        sleep 5;
+      done &&
+      echo 'Starting DCAI application...' &&
+      $$PYTHON_ENV_PATH/bin/python DCAI_KN_Chat_Dash_UI_Gradio_Mock.py
+      "
+
+  react-ui:
+    image: node:20-slim
+    container_name: react-ui
+    working_dir: /app/react-ui
+    ports:
+      - "5173:5173"
+    volumes:
+      - .:/app
+      - react_node_modules:/app/react-ui/node_modules
+    depends_on:
+      - dcai-app
+    networks:
+      - shared-network
+    restart: unless-stopped
+    environment:
+      - VITE_API_BASE_URL=http://localhost:8000
+    command: >
+      sh -c "
+      npm install &&
+      npm run dev -- --host 0.0.0.0 --port 5173
+      "
+
+networks:
+  shared-network:
+    name: shared-network
+    driver: bridge
+  opik_default:
+    external: true 
+
+volumes:
+  elasticsearch_data:
+    driver: local
+  python_env:
+    driver: local
+  react_node_modules:
+    driver: local

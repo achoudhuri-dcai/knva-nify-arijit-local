@@ -82,9 +82,26 @@ React UI dev run:
 
 CORS allow-list for React dev origins:
 - `REACT_UI_ALLOWED_ORIGINS=http://localhost:5173`
+- Local-only auth bypass for React API testing without ALB SSO headers:
+  - `LOCAL_DEV_AUTH_BYPASS=true` (use only for localhost/dev)
 
 Feature flag for enhanced NIF step starter/load flow in React:
 - `REACT_NIF_STEP_ENHANCED=true`
+
+Opik tracing (OpenTelemetry OTLP):
+- `OPIK_TRACE_ENABLED=true`
+- `OPIK_OTLP_ENDPOINT=http://otel-collector:4317`
+- `OPIK_OTLP_INSECURE=true`
+- `OPIK_PROJECT_NAME=knva-nifty`
+- `OPIK_SERVICE_NAME=dcai-app`
+- `OPIK_ENV=local|qa|prod`
+- `OPIK_TRACE_SAMPLE_RATE=0.0..1.0`
+
+Opik UI-native traces (Opik Python SDK):
+- `OPIK_SDK_TRACE_ENABLED=true`
+- `OPIK_SDK_HOST=http://opik-backend-1:8080`
+- `OPIK_SDK_WORKSPACE=default`
+- `OPIK_SDK_PROJECT_NAME=Default Project`
 
 ## Dash QA merge track
 

@@ -154,6 +154,7 @@ opentelemetry-proto==1.37.0
 opentelemetry-sdk==1.37.0
 opentelemetry-semantic-conventions==0.58b0
 opentelemetry-util-http==0.58b0
+opik>=1.0.0
 orjson==3.11.3
 overrides==7.7.0
 packaging==25.0
