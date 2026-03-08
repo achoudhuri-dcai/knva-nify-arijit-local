@@ -98,6 +98,10 @@ services:
       - ELASTICSEARCH_PORT=9200
       - REACT_UI_ALLOWED_ORIGINS=http://localhost:5174,http://127.0.0.1:5174,http://localhost:5173,http://127.0.0.1:5173
       - LOCAL_DEV_AUTH_BYPASS=true
+      - AWS_DEV_AUTH_BYPASS=true
+      - AWS_DEV_AUTH_BYPASS_KEY=7ddb942e80f7e6c74ee79306ccc33aea45bf15915f0941d320f6fc0df8a7750b
+      - AWS_DEV_USER_NAME=AWS DCAI Tester
+      - AWS_DEV_USER_EMAIL=aws.dcai.tester@demandchainai.com
       - DASH_HOST=0.0.0.0
       - DASH_PORT=8000
       - PYTHON_ENV_PATH=/opt/python_env
@@ -155,7 +159,9 @@ services:
       - shared-network
     restart: unless-stopped
     environment:
-      - VITE_API_BASE_URL=http://localhost:8000
+      - VITE_API_BASE_URL=
+      - VITE_API_PROXY_TARGET=http://dcai-app:8000
+      - VITE_AWS_DEV_AUTH_BYPASS_KEY=7ddb942e80f7e6c74ee79306ccc33aea45bf15915f0941d320f6fc0df8a7750b
     command: >
       sh -c "
       npm install &&

@@ -84,6 +84,10 @@ CORS allow-list for React dev origins:
 - `REACT_UI_ALLOWED_ORIGINS=http://localhost:5173`
 - Local-only auth bypass for React API testing without ALB SSO headers:
   - `LOCAL_DEV_AUTH_BYPASS=true` (use only for localhost/dev)
+- Temporary AWS dev auth bypass (not for production):
+  - `AWS_DEV_AUTH_BYPASS=true`
+  - `AWS_DEV_AUTH_BYPASS_KEY=<shared secret>`
+  - React header key env: `VITE_AWS_DEV_AUTH_BYPASS_KEY=<same shared secret>`
 
 Feature flag for enhanced NIF step starter/load flow in React:
 - `REACT_NIF_STEP_ENHANCED=true`

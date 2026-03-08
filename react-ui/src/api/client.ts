@@ -19,11 +19,20 @@ function apiBaseUrl(): string {
   return configured || "";
 }
 
+function devBypassHeaders(): Record<string, string> {
+  const key = String(import.meta.env.VITE_AWS_DEV_AUTH_BYPASS_KEY ?? "").trim();
+  if (!key) {
+    return {};
+  }
+  return { "X-Dev-Bypass-Key": key };
+}
+
 async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${apiBaseUrl()}${path}`, {
     credentials: "include",
     headers: {
       "Content-Type": "application/json",
+      ...devBypassHeaders(),
       ...(init?.headers || {}),
     },
     ...init,
@@ -152,6 +161,7 @@ export async function downloadNifFile(payload: {
     credentials: "include",
     headers: {
       "Content-Type": "application/json",
+      ...devBypassHeaders(),
     },
     body: JSON.stringify(payload),
   });

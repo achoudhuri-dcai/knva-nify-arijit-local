@@ -32,6 +32,7 @@ import re
 import uuid
 import threading
 import hashlib
+import hmac
 from typing import List, Tuple, Optional
 from io import StringIO
 from dotenv import find_dotenv, load_dotenv, dotenv_values
@@ -7479,12 +7480,20 @@ def _is_local_host(value: str) -> bool:
 
 
 def _allow_local_dev_auth_bypass() -> bool:
-    if not _env_flag("LOCAL_DEV_AUTH_BYPASS", default=False):
-        return False
-    host_ok = _is_local_host(request.host)
-    origin = (request.headers.get("Origin") or "").strip()
-    origin_ok = (not origin) or _is_local_host(origin)
-    return host_ok and origin_ok
+    if _env_flag("LOCAL_DEV_AUTH_BYPASS", default=False):
+        host_ok = _is_local_host(request.host)
+        origin = (request.headers.get("Origin") or "").strip()
+        origin_ok = (not origin) or _is_local_host(origin)
+        if host_ok and origin_ok:
+            return True
+
+    if _env_flag("AWS_DEV_AUTH_BYPASS", default=False):
+        expected = str(os.getenv("AWS_DEV_AUTH_BYPASS_KEY", "") or "").strip()
+        provided = str(request.headers.get("X-Dev-Bypass-Key", "") or "").strip()
+        if expected and provided and hmac.compare_digest(provided, expected):
+            return True
+
+    return False
 
 
 def _api_user_payload():
@@ -7494,6 +7503,14 @@ def _api_user_payload():
     user = g.user if getattr(g, "user", None) else {}
     if not user:
         if _allow_local_dev_auth_bypass():
+            if _env_flag("AWS_DEV_AUTH_BYPASS", default=False):
+                return {
+                    "name": os.getenv("AWS_DEV_USER_NAME", "AWS Dev User"),
+                    "email": os.getenv("AWS_DEV_USER_EMAIL", "aws.dev.user@example.com"),
+                    "roles": ["aws-dev-bypass"],
+                    "sub": "aws-dev-bypass",
+                    "upn": "aws-dev-bypass",
+                }
             return {
                 "name": os.getenv("LOCAL_DEV_USER_NAME", "Local Dev User"),
                 "email": os.getenv("LOCAL_DEV_USER_EMAIL", "local.dev.user@localhost"),
